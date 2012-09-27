@@ -72,6 +72,12 @@
     <Compile Include="..\Resources\DefaultPlugins\BF3\CTrueBalancerBF3.cs">
       <Link>CTrueBalancerBF3.cs</Link>
     </Compile>
+    <Compile Include="..\Resources\DefaultPlugins\BF3\InsaneBalancer.cs">
+      <Link>InsaneBalancer.cs</Link>
+    </Compile>
+    <Compile Include="..\Resources\DefaultPlugins\BF3\InsaneLimits.cs">
+      <Link>InsaneLimits.cs</Link>
+    </Compile>
     <Compile Include="Accounts\Account.cs" />
     <Compile Include="Accounts\AccountDictionary.cs" />
     <Compile Include="Accounts\AccountPrivilege.cs" />
