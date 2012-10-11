@@ -1218,6 +1218,7 @@ namespace PRoConEvents {
             this.booleanVariables.Add("balance_round", true);
             this.booleanVariables.Add("balance_live", true);
             this.booleanVariables.Add("kick_idle", true);
+            this.booleanVariables.Add("balance_idle", true);
             this.booleanVariables.Add("wait_death", false);
 
 
@@ -1298,6 +1299,7 @@ namespace PRoConEvents {
             this.booleanVarValidators.Add("use_extra_white_lists", booleanValidator);
             this.booleanVarValidators.Add("virtual_mode", booleanValidator);
             this.booleanVarValidators.Add("kick_idle", booleanValidator);
+            this.booleanVarValidators.Add("balance_idle", booleanValidator);
             this.booleanVarValidators.Add("wait_death", booleanValidator);
 
             this.stringVarValidators = new Dictionary<string, stringVariableValidator>();
@@ -1377,6 +1379,7 @@ namespace PRoConEvents {
             live_balancer_group.Add("ticket_threshold_percent");
             live_balancer_group.Add("ticket_threshold_max");
             live_balancer_group.Add("disable_team_change");
+            live_balancer_group.Add("balance_idle");
 
             settings_group.Add("Round Interval", map_interval);
             settings_group.Add("Whitelist", whitelist_group);
@@ -2208,6 +2211,17 @@ namespace PRoConEvents {
               There are five indicators of activity that the plugin keeps track of. These are: <b>chat</b>, <b>kills</b>, <b>deaths</b>, <b>spawn</b>, and <b>score</b>. <br />
               <br />
               For a player to be considered idle, all five activity indicators must be true. If any of the indicators is not true, then the player is not considered idle.<br />
+          </blockquote> 
+          </li>
+          <li><blockquote><strong>balance_idle</strong><br />
+                <i>true</i> - attempts to keep the number of idlers on each team even<br />
+                <i>false</i> - does not attempt to keep the idlers on each team even <br />
+               <br />
+              When set to true, idlers will not be considered as actual players during live balancing and will be balanced separately.<br />
+              <br />
+              This is designed to assist with server seeding, such that no one team is stacked with idlers, and high (or low)-ranking idlers
+              do not inappropriately skew the balancing algorithm.  <br />
+              Idlers will be balanced such that there are as close to an even number of idlers on each team as possible.  
           </blockquote> 
           </li>
            <li><blockquote><strong>last_chat_time</strong><br />
