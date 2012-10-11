@@ -67,6 +67,8 @@ namespace PRoConEvents
         private string m_strCurrentPreset;
         private string m_strCurrentServerName;
         private Dictionary<string, string[]> m_DPreset;
+        private Dictionary<string, CPluginVariable> m_LGDPVDict;
+        private Dictionary<string, CPluginVariable> m_LGPVDict; 
         private List<CPluginVariable> m_LGDPVList;
         private List<CPluginVariable> m_LGPVList;
         private bool m_blUseSystemTZ;
@@ -417,6 +419,8 @@ namespace PRoConEvents
             this.m_iNextMapIndex = -1;
             this.m_strCurrentPreset = "";
             this.m_strCurrentServerName = "";
+            this.m_LGDPVDict = new Dictionary<string, CPluginVariable>();
+            this.m_LGPVDict = new Dictionary<string, CPluginVariable>();
             this.m_LGDPVList = new List<CPluginVariable>();
             this.m_LGPVList = new List<CPluginVariable>();
             this.m_blUseSystemTZ = SecurityManager.IsGranted(new SecurityPermission(SecurityPermissionFlag.UnmanagedCode));
@@ -734,68 +738,68 @@ namespace PRoConEvents
         // It's the best I got until I implement a way for plugins to display their own small interfaces.
         public List<CPluginVariable> GetDisplayPluginVariables()
         {
-            if (this.m_LGDPVList.Count != 0)
+            if (this.m_LGDPVDict.Count != 0)
             {
-                return this.m_LGDPVList;
+                return new List<CPluginVariable>(this.m_LGDPVDict.Values);
             }
+            this.m_LGDPVDict["* Ultimate Map Manager|Enable map list manager?"] =  new CPluginVariable("* Ultimate Map Manager|Enable map list manager?", typeof(enumBoolYesNo), this.m_enMapManager);
 
-            this.m_LGDPVList.Add(new CPluginVariable("* Ultimate Map Manager|Enable map list manager?", typeof(enumBoolYesNo), this.m_enMapManager));
             if (this.m_enCompleteRounds == enumBoolYesNo.No)
             {
-                this.m_LGDPVList.Add(new CPluginVariable("* Ultimate Map Manager|Switch to new map list immediately?", typeof(enumBoolYesNo), this.m_enRestartNow));
+                this.m_LGDPVDict["* Ultimate Map Manager|Switch to new map list immediately?"] =  new CPluginVariable("* Ultimate Map Manager|Switch to new map list immediately?", typeof(enumBoolYesNo), this.m_enRestartNow);
                 if (this.m_enRestartNow == enumBoolYesNo.Yes)
                 {
-                    this.m_LGDPVList.Add(new CPluginVariable("* Ultimate Map Manager|    Do not switch if more than this number of players are online", this.m_iRestartLimit.GetType(), this.m_iRestartLimit));
-                    this.m_LGDPVList.Add(new CPluginVariable("* Ultimate Map Manager|    Warn (yell at) players before switching?", typeof(enumBoolYesNo), this.m_enRestartWarning));
+                    this.m_LGDPVDict["* Ultimate Map Manager|    Do not switch if more than this number of players are online"] = new CPluginVariable("* Ultimate Map Manager|    Do not switch if more than this number of players are online", this.m_iRestartLimit.GetType(), this.m_iRestartLimit);
+                    this.m_LGDPVDict["* Ultimate Map Manager|    Warn (yell at) players before switching?"] = new CPluginVariable("* Ultimate Map Manager|    Warn (yell at) players before switching?", typeof(enumBoolYesNo), this.m_enRestartWarning);
                     if (this.m_enRestartWarning == enumBoolYesNo.Yes)
                     {
-                        this.m_LGDPVList.Add(new CPluginVariable("* Ultimate Map Manager|        Number of seconds to display warning", this.m_enRestartWarningTime.GetType(), this.m_enRestartWarningTime));
-                        this.m_LGDPVList.Add(new CPluginVariable("* Ultimate Map Manager|        Warning message (use [listname] for map list name and [secs] for seconds)", this.m_strRestartWarningMessage.GetType(), this.m_strRestartWarningMessage));
+                        this.m_LGDPVDict["* Ultimate Map Manager|        Number of seconds to display warning"] = new CPluginVariable("* Ultimate Map Manager|        Number of seconds to display warning", this.m_enRestartWarningTime.GetType(), this.m_enRestartWarningTime);
+                        this.m_LGDPVDict["* Ultimate Map Manager|        Warning message (use [listname] for map list name and [secs] for seconds)"] = new CPluginVariable("* Ultimate Map Manager|        Warning message (use [listname] for map list name and [secs] for seconds)", this.m_strRestartWarningMessage.GetType(), this.m_strRestartWarningMessage);
                     }
                 }
             }
             if (this.m_enRestartNow == enumBoolYesNo.No)
             {
-                this.m_LGDPVList.Add(new CPluginVariable("* Ultimate Map Manager|Change map list only after map has complete it's total number of rounds?", typeof(enumBoolYesNo), this.m_enCompleteRounds));
+                this.m_LGDPVDict["* Ultimate Map Manager|Change map list only after map has complete it's total number of rounds?"] = new CPluginVariable("* Ultimate Map Manager|Change map list only after map has complete it's total number of rounds?", typeof(enumBoolYesNo), this.m_enCompleteRounds);
             }
-            this.m_LGDPVList.Add(new CPluginVariable("* Ultimate Map Manager|Enable server name change for each map list?", typeof(enumBoolYesNo), this.m_enEnableServerName));
-            this.m_LGDPVList.Add(new CPluginVariable("* Ultimate Map Manager|Enable day/time-dependent map lists?", typeof(enumBoolYesNo), this.m_enTimeOptions));
+            this.m_LGDPVDict["* Ultimate Map Manager|Enable server name change for each map list?"] = new CPluginVariable("* Ultimate Map Manager|Enable server name change for each map list?", typeof(enumBoolYesNo), this.m_enEnableServerName);
+            this.m_LGDPVDict["* Ultimate Map Manager|Enable day/time-dependent map lists?"] = new CPluginVariable("* Ultimate Map Manager|Enable day/time-dependent map lists?", typeof(enumBoolYesNo), this.m_enTimeOptions);
             if (this.m_enTimeOptions == enumBoolYesNo.Yes && this.m_blUseSystemTZ)
             {
                 if (this.m_enRestartNow == enumBoolYesNo.Yes)
                 {
                     this.m_LGDPVList.Add(new CPluginVariable("* Ultimate Map Manager|    Ignore 'Switch to new map list immediately' setting for time-based changes?", typeof(enumBoolYesNo), this.m_enTimeNotNow));
                 }
-                this.m_LGDPVList.Add(new CPluginVariable("* Ultimate Map Manager|    Use system/layer server time zone?", typeof(enumBoolYesNo), this.m_enUseSystemTZ));
+                this.m_LGDPVDict["* Ultimate Map Manager|    Use system/layer server time zone?"] = new CPluginVariable("* Ultimate Map Manager|    Use system/layer server time zone?", typeof(enumBoolYesNo), this.m_enUseSystemTZ);
                 if (this.m_enUseSystemTZ == enumBoolYesNo.No)
                 {
-                    this.m_LGDPVList.Add(new CPluginVariable("* Ultimate Map Manager|        Time Zone used to determine current time", "enum.TimeZones(" + String.Join("|", TimeZoneInformation.TimeZoneNames) + ")", this.m_strTimeZone));
+                    this.m_LGDPVDict["* Ultimate Map Manager|        Time Zone used to determine current time"] = new CPluginVariable("* Ultimate Map Manager|        Time Zone used to determine current time", "enum.TimeZones(" + String.Join("|", TimeZoneInformation.TimeZoneNames) + ")", this.m_strTimeZone);
                 }
             }
-            this.m_LGDPVList.Add(new CPluginVariable("* Ultimate Map Manager|Allow map-specific game presets?", typeof(enumBoolYesNo), this.m_enAllowPresets));
-            this.m_LGDPVList.Add(new CPluginVariable("* Ultimate Map Manager|Add a new map list?", "enum.AddNewMapList(...|Create an empty map list|Create a map list based on current map list)", "..."));
+            this.m_LGDPVDict["* Ultimate Map Manager|Allow map-specific game presets?"] = new CPluginVariable("* Ultimate Map Manager|Allow map-specific game presets?", typeof(enumBoolYesNo), this.m_enAllowPresets);
+            this.m_LGDPVDict["* Ultimate Map Manager|Add a new map list?"] = new CPluginVariable("* Ultimate Map Manager|Add a new map list?", "enum.AddNewMapList(...|Create an empty map list|Create a map list based on current map list)", "...");
             foreach (MaplistConfig MCMaplist in this.m_LMaplists)
             {
-                this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Enable this map list?", typeof(enumBoolYesNo), MCMaplist.Enabled));
-                this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Map list name", MCMaplist.Name.GetType(), MCMaplist.Name));
+                this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Enable this map list?"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Enable this map list?", typeof(enumBoolYesNo), MCMaplist.Enabled);
+                this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Map list name"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Map list name", MCMaplist.Name.GetType(), MCMaplist.Name);
                 if (this.m_enEnableServerName == enumBoolYesNo.Yes)
                 {
-                    this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Server name for this map list", MCMaplist.ServerName.GetType(), MCMaplist.ServerName));
+                    this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Server name for this map list"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Server name for this map list", MCMaplist.ServerName.GetType(), MCMaplist.ServerName);
                 }
-                this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Minimum number of players", MCMaplist.MinPlayers.GetType(), MCMaplist.MinPlayers));
-                this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Maximum number of players", MCMaplist.MaxPlayers.GetType(), MCMaplist.MaxPlayers));
+                this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Minimum number of players"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Minimum number of players", MCMaplist.MinPlayers.GetType(), MCMaplist.MinPlayers);
+                this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Maximum number of players"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Maximum number of players", MCMaplist.MaxPlayers.GetType(), MCMaplist.MaxPlayers);
                 if (this.m_enTimeOptions == enumBoolYesNo.Yes)
                 {
-                    this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Days of week/month to use this map list", MCMaplist.DaysValid.GetType(), MCMaplist.DaysValid));
-                    this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Time to start using this map list (24-hour format)", MCMaplist.TimeStart.GetType(), MCMaplist.TimeStart));
-                    this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Time to stop using this map list (24-hour format)", MCMaplist.TimeStop.GetType(), MCMaplist.TimeStop));
+                    this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Days of week/month to use this map list"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Days of week/month to use this map list", MCMaplist.DaysValid.GetType(), MCMaplist.DaysValid);
+                    this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Time to start using this map list (24-hour format)"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Time to start using this map list (24-hour format)", MCMaplist.TimeStart.GetType(), MCMaplist.TimeStart);
+                    this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Time to stop using this map list (24-hour format)"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Time to stop using this map list (24-hour format)", MCMaplist.TimeStop.GetType(), MCMaplist.TimeStop);
                 }
-                this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] List start/random preference", "enum.MapRandomization(Start with first map|Start with first map unless it was just played|Start with map after the map that was just played|Start with same map that was just played|Start with random map|Randomize entire map list)", MCMaplist.MapListStart));
-                this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Minimum number of rounds to be played", MCMaplist.MinRounds.GetType(), MCMaplist.MinRounds));
-                this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|-------------------------", typeof(string), ""));
+                this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] List start/random preference"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] List start/random preference", "enum.MapRandomization(Start with first map|Start with first map unless it was just played|Start with map after the map that was just played|Start with same map that was just played|Start with random map|Randomize entire map list)", MCMaplist.MapListStart);
+                this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Minimum number of rounds to be played"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Minimum number of rounds to be played", MCMaplist.MinRounds.GetType(), MCMaplist.MinRounds);
+                this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|-------------------------"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|-------------------------", typeof(string), "");
                 foreach (MaplistConfig.MaplistInfo MEMap in MCMaplist.Maplist)
                 {
-                    this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Game Mode", "enum.GameModes(" + String.Join("|", this.GetMapList("{GameMode}").ToArray()) + ")", MEMap.PublicGamemode));
+                    this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Game Mode"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Game Mode", "enum.GameModes(" + String.Join("|", this.GetMapList("{GameMode}").ToArray()) + ")", MEMap.PublicGamemode);
                     List<string> LPublicGameModes = new List<string>();
                     foreach (CMap map in this.GetMapDefines())
                     {
@@ -804,18 +808,18 @@ namespace PRoConEvents
                             LPublicGameModes.Add(map.PublicLevelName);
                         }
                     }
-                    this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Map Name", "enum.Maps" + MEMap.PublicGamemode.Replace(" ", "") + "(" + String.Join("|", LPublicGameModes.ToArray()) + ")", this.GetMapByFilename(MEMap.MapFileName).PublicLevelName));
-                    this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Rounds", MEMap.Rounds.GetType(), MEMap.Rounds));
+                    this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Map Name"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Map Name", "enum.Maps" + MEMap.PublicGamemode.Replace(" ", "") + "(" + String.Join("|", LPublicGameModes.ToArray()) + ")", this.GetMapByFilename(MEMap.MapFileName).PublicLevelName);
+                    this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Rounds"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Rounds", MEMap.Rounds.GetType(), MEMap.Rounds);
                     if (this.m_enAllowPresets == enumBoolYesNo.Yes)
                     {
                         List<string> presetList = new List<string>(this.m_DPreset.Keys);
-                        this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Preset", "enum.Presets" + String.Join("", presetList.ToArray()).Replace(" ", "") + "(" + String.Join("|", presetList.ToArray()) + ")", MEMap.Preset));
+                        this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Preset"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Preset", "enum.Presets" + String.Join("", presetList.ToArray()).Replace(" ", "") + "(" + String.Join("|", presetList.ToArray()) + ")", MEMap.Preset);
                     }
-                    this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Manage Map", "enum.ManageMap(...|Move Up|Move Down|-----|Remove Map)", "..."));
-                    this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|-------------------------", typeof(string), ""));
+                    this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Manage Map"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] [" + MEMap.Index + "] Manage Map", "enum.ManageMap(...|Move Up|Move Down|-----|Remove Map)", "...");
+                    this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|-------------------------"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|-------------------------", typeof(string), "");
                 }
-                this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Add a new map?", "enum.AddNewMap(...|Add 1 new map|Add 2 new maps|Add 3 new maps|Add 4 new maps|Add 5 new maps|Add 6 new maps|Add 7 new maps|Add 8 new maps|-----)", "..."));
-                this.m_LGDPVList.Add(new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Manage Map List", "enum.ManageList(...|Move Up|Move Down|-----|Remove Entire Map List)", "..."));
+                this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Add a new map?"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Add a new map?", "enum.AddNewMap(...|Add 1 new map|Add 2 new maps|Add 3 new maps|Add 4 new maps|Add 5 new maps|Add 6 new maps|Add 7 new maps|Add 8 new maps|-----)", "...");
+                this.m_LGDPVDict["Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Manage Map List"] = new CPluginVariable("Map List " + MCMaplist.Index + " [" + MCMaplist.Name + "]|[" + MCMaplist.Index + "] Manage Map List", "enum.ManageList(...|Move Up|Move Down|-----|Remove Entire Map List)", "...");
             }
             if (this.m_enAllowPresets == enumBoolYesNo.Yes)
             {
@@ -831,66 +835,66 @@ namespace PRoConEvents
                     {
                         deleteList.Add("|Remove " + preset.Key);
                     }
-                    this.m_LGDPVList.Add(new CPluginVariable("Presets|" + preset.Key + viewMessage, preset.Value.GetType(), preset.Value));
+                    this.m_LGDPVDict["Presets|" + preset.Key + viewMessage] = new CPluginVariable("Presets|" + preset.Key + viewMessage, preset.Value.GetType(), preset.Value);
                 }
-                this.m_LGDPVList.Add(new CPluginVariable("Presets|Manage Presets", "enum.ManagePresets" + String.Join("", deleteList.ToArray()).Replace(" ", "") + "(...|Add custom preset based on Normal|Add custom preset based on Hardcore|Add custom preset based on Infantry Only" + String.Join("", deleteList.ToArray()) + ")", "..."));
+                this.m_LGDPVDict["Presets|Manage Presets"] = new CPluginVariable("Presets|Manage Presets", "enum.ManagePresets" + String.Join("", deleteList.ToArray()).Replace(" ", "") + "(...|Add custom preset based on Normal|Add custom preset based on Hardcore|Add custom preset based on Infantry Only" + String.Join("", deleteList.ToArray()) + ")", "...");
             }
-            this.m_LGDPVList.Add(new CPluginVariable("Xtras|Enable debug output?", typeof(enumBoolYesNo), this.m_enDoDebugOutput));
+            this.m_LGDPVDict["Xtras|Enable debug output?"] = new CPluginVariable("Xtras|Enable debug output?", typeof(enumBoolYesNo), this.m_enDoDebugOutput);
 
-            return this.m_LGDPVList;
+            return new List<CPluginVariable>(this.m_LGDPVDict.Values);
         }
 
         // Lists all of the plugin variables.
         public List<CPluginVariable> GetPluginVariables()
         {
-            if (this.m_LGPVList.Count != 0)
+            if (this.m_LGPVDict.Count != 0)
             {
-                return this.m_LGPVList;
+                return new List<CPluginVariable>(this.m_LGPVDict.Values);
             }
 
-            this.m_LGPVList.Add(new CPluginVariable("Enable map list manager?", typeof(enumBoolYesNo), this.m_enMapManager));
-            this.m_LGPVList.Add(new CPluginVariable("Switch to new map list immediately?", typeof(enumBoolYesNo), this.m_enRestartNow));
-            this.m_LGPVList.Add(new CPluginVariable("    Do not switch if more than this number of players are online", this.m_iRestartLimit.GetType(), this.m_iRestartLimit));
-            this.m_LGPVList.Add(new CPluginVariable("    Warn (yell at) players before switching?", typeof(enumBoolYesNo), this.m_enRestartWarning));
-            this.m_LGPVList.Add(new CPluginVariable("        Number of seconds to display warning", this.m_enRestartWarningTime.GetType(), this.m_enRestartWarningTime));
-            this.m_LGPVList.Add(new CPluginVariable("        Warning message (use [listname] for map list name and [secs] for seconds)", this.m_strRestartWarningMessage.GetType(), this.m_strRestartWarningMessage));
-            this.m_LGPVList.Add(new CPluginVariable("Change map list only after map has complete it's total number of rounds?", typeof(enumBoolYesNo), this.m_enCompleteRounds));
-            this.m_LGPVList.Add(new CPluginVariable("Enable server name change for each map list?", typeof(enumBoolYesNo), this.m_enEnableServerName));
-            this.m_LGPVList.Add(new CPluginVariable("Enable day/time-dependent map lists?", typeof(enumBoolYesNo), this.m_enTimeOptions));
-            this.m_LGPVList.Add(new CPluginVariable("    Ignore 'Switch to new map list immediately' setting for time-based changes?", typeof(enumBoolYesNo), this.m_enTimeNotNow));
-            this.m_LGPVList.Add(new CPluginVariable("    Use system/layer server time zone?", typeof(enumBoolYesNo), this.m_enUseSystemTZ));
-            this.m_LGPVList.Add(new CPluginVariable("        Time Zone used to determine current time", typeof(string), "CONFIG:" + this.m_strTimeZone.Replace("+", "%2B")));
-            this.m_LGPVList.Add(new CPluginVariable("Allow map-specific game presets?", typeof(enumBoolYesNo), this.m_enAllowPresets));
+            this.m_LGPVDict["Enable map list manager?"] = new CPluginVariable("Enable map list manager?", typeof(enumBoolYesNo), this.m_enMapManager);
+            this.m_LGPVDict["Switch to new map list immediately?"] = new CPluginVariable("Switch to new map list immediately?", typeof(enumBoolYesNo), this.m_enRestartNow);
+            this.m_LGPVDict["    Do not switch if more than this number of players are online"] = new CPluginVariable("    Do not switch if more than this number of players are online", this.m_iRestartLimit.GetType(), this.m_iRestartLimit);
+            this.m_LGPVDict["    Warn (yell at) players before switching?"] = new CPluginVariable("    Warn (yell at) players before switching?", typeof(enumBoolYesNo), this.m_enRestartWarning);
+            this.m_LGPVDict["        Number of seconds to display warning"] = new CPluginVariable("        Number of seconds to display warning", this.m_enRestartWarningTime.GetType(), this.m_enRestartWarningTime);
+            this.m_LGPVDict["        Warning message (use [listname] for map list name and [secs] for seconds)"] = new CPluginVariable("        Warning message (use [listname] for map list name and [secs] for seconds)", this.m_strRestartWarningMessage.GetType(), this.m_strRestartWarningMessage);
+            this.m_LGPVDict["Change map list only after map has complete it's total number of rounds?"] = new CPluginVariable("Change map list only after map has complete it's total number of rounds?", typeof(enumBoolYesNo), this.m_enCompleteRounds);
+            this.m_LGPVDict["Enable server name change for each map list?"] = new CPluginVariable("Enable server name change for each map list?", typeof(enumBoolYesNo), this.m_enEnableServerName);
+            this.m_LGPVDict["Enable day/time-dependent map lists?"] = new CPluginVariable("Enable day/time-dependent map lists?", typeof(enumBoolYesNo), this.m_enTimeOptions);
+            this.m_LGPVDict["    Ignore 'Switch to new map list immediately' setting for time-based changes?"] = new CPluginVariable("    Ignore 'Switch to new map list immediately' setting for time-based changes?", typeof(enumBoolYesNo), this.m_enTimeNotNow);
+            this.m_LGPVDict["    Use system/layer server time zone?"] = new CPluginVariable("    Use system/layer server time zone?", typeof(enumBoolYesNo), this.m_enUseSystemTZ);
+            this.m_LGPVDict["        Time Zone used to determine current time"] = new CPluginVariable("        Time Zone used to determine current time", typeof(string), "CONFIG:" + this.m_strTimeZone.Replace("+", "%2B"));
+            this.m_LGPVDict["Allow map-specific game presets?"] = new CPluginVariable("Allow map-specific game presets?", typeof(enumBoolYesNo), this.m_enAllowPresets);
             foreach (KeyValuePair<string, string[]> preset in this.m_DPreset)
             {
                 if (!(new List<string>(new string[] { "Normal", "Hardcore", "Infantry Only" }).Contains(preset.Key)))
                 {
-                    this.m_LGPVList.Add(new CPluginVariable(preset.Key, preset.Value.GetType(), preset.Value));
+                    this.m_LGPVDict[preset.Key] = new CPluginVariable(preset.Key, preset.Value.GetType(), preset.Value);
                 }
             }
             foreach (MaplistConfig MCMaplist in this.m_LMaplists)
             {
-                this.m_LGPVList.Add(new CPluginVariable("[" + MCMaplist.Index + "] Enable this map list?", typeof(string), "CONFIG:" + MCMaplist.Enabled));
-                this.m_LGPVList.Add(new CPluginVariable("[" + MCMaplist.Index + "] Map list name", MCMaplist.Name.GetType(), "CONFIG:" + MCMaplist.Name));
-                this.m_LGPVList.Add(new CPluginVariable("[" + MCMaplist.Index + "] Server name for this map list", MCMaplist.ServerName.GetType(), "CONFIG:" + MCMaplist.ServerName));
-                this.m_LGPVList.Add(new CPluginVariable("[" + MCMaplist.Index + "] Minimum number of players", typeof(string), "CONFIG:" + MCMaplist.MinPlayers));
-                this.m_LGPVList.Add(new CPluginVariable("[" + MCMaplist.Index + "] Maximum number of players", typeof(string), "CONFIG:" + MCMaplist.MaxPlayers));
-                this.m_LGPVList.Add(new CPluginVariable("[" + MCMaplist.Index + "] Days of week/month to use this map list", typeof(string), "CONFIG:" + CPluginVariable.EncodeStringArray(MCMaplist.DaysValid)));
-                this.m_LGPVList.Add(new CPluginVariable("[" + MCMaplist.Index + "] Time to start using this map list (24-hour format)", MCMaplist.TimeStart.GetType(), "CONFIG:" + MCMaplist.TimeStart));
-                this.m_LGPVList.Add(new CPluginVariable("[" + MCMaplist.Index + "] Time to stop using this map list (24-hour format)", MCMaplist.TimeStop.GetType(), "CONFIG:" + MCMaplist.TimeStop));
-                this.m_LGPVList.Add(new CPluginVariable("[" + MCMaplist.Index + "] List start/random preference", typeof(string), "CONFIG:" + MCMaplist.MapListStart));
-                this.m_LGPVList.Add(new CPluginVariable("[" + MCMaplist.Index + "] Minimum number of rounds to be played", typeof(string), "CONFIG:" + MCMaplist.MinRounds));
+                this.m_LGPVDict["[" + MCMaplist.Index + "] Enable this map list?"] = new CPluginVariable("[" + MCMaplist.Index + "] Enable this map list?", typeof(string), "CONFIG:" + MCMaplist.Enabled);
+                this.m_LGPVDict["[" + MCMaplist.Index + "] Map list name"] = new CPluginVariable("[" + MCMaplist.Index + "] Map list name", MCMaplist.Name.GetType(), "CONFIG:" + MCMaplist.Name);
+                this.m_LGPVDict["[" + MCMaplist.Index + "] Server name for this map list"] = new CPluginVariable("[" + MCMaplist.Index + "] Server name for this map list", MCMaplist.ServerName.GetType(), "CONFIG:" + MCMaplist.ServerName);
+                this.m_LGPVDict["[" + MCMaplist.Index + "] Minimum number of players"] = new CPluginVariable("[" + MCMaplist.Index + "] Minimum number of players", typeof(string), "CONFIG:" + MCMaplist.MinPlayers);
+                this.m_LGPVDict["[" + MCMaplist.Index + "] Maximum number of players"] = new CPluginVariable("[" + MCMaplist.Index + "] Maximum number of players", typeof(string), "CONFIG:" + MCMaplist.MaxPlayers);
+                this.m_LGPVDict["[" + MCMaplist.Index + "] Days of week/month to use this map list"] = new CPluginVariable("[" + MCMaplist.Index + "] Days of week/month to use this map list", typeof(string), "CONFIG:" + CPluginVariable.EncodeStringArray(MCMaplist.DaysValid));
+                this.m_LGPVDict["[" + MCMaplist.Index + "] Time to start using this map list (24-hour format)"] = new CPluginVariable("[" + MCMaplist.Index + "] Time to start using this map list (24-hour format)", MCMaplist.TimeStart.GetType(), "CONFIG:" + MCMaplist.TimeStart);
+                this.m_LGPVDict["[" + MCMaplist.Index + "] Time to stop using this map list (24-hour format)"] = new CPluginVariable("[" + MCMaplist.Index + "] Time to stop using this map list (24-hour format)", MCMaplist.TimeStop.GetType(), "CONFIG:" + MCMaplist.TimeStop);
+                this.m_LGPVDict["[" + MCMaplist.Index + "] List start/random preference"] = new CPluginVariable("[" + MCMaplist.Index + "] List start/random preference", typeof(string), "CONFIG:" + MCMaplist.MapListStart);
+                this.m_LGPVDict["[" + MCMaplist.Index + "] Minimum number of rounds to be played"] = new CPluginVariable("[" + MCMaplist.Index + "] Minimum number of rounds to be played", typeof(string), "CONFIG:" + MCMaplist.MinRounds);
                 foreach (MaplistConfig.MaplistInfo MEMap in MCMaplist.Maplist)
                 {
-                    this.m_LGPVList.Add(new CPluginVariable("[" + MCMaplist.Index + "] [" + MEMap.Index + "] Game Mode", MEMap.Gamemode.GetType(), "CONFIG:" + MEMap.Gamemode));
-                    this.m_LGPVList.Add(new CPluginVariable("[" + MCMaplist.Index + "] [" + MEMap.Index + "] Map Name", MEMap.MapFileName.GetType(), "CONFIG:" + MEMap.MapFileName));
-                    this.m_LGPVList.Add(new CPluginVariable("[" + MCMaplist.Index + "] [" + MEMap.Index + "] Rounds", typeof(string), "CONFIG:" + MEMap.Rounds));
-                    this.m_LGPVList.Add(new CPluginVariable("[" + MCMaplist.Index + "] [" + MEMap.Index + "] Preset", MEMap.Preset.GetType(), "CONFIG:" + MEMap.Preset));
+                    this.m_LGPVDict["[" + MCMaplist.Index + "] [" + MEMap.Index + "] Game Mode"] = new CPluginVariable("[" + MCMaplist.Index + "] [" + MEMap.Index + "] Game Mode", MEMap.Gamemode.GetType(), "CONFIG:" + MEMap.Gamemode);
+                    this.m_LGPVDict["[" + MCMaplist.Index + "] [" + MEMap.Index + "] Map Name"] = new CPluginVariable("[" + MCMaplist.Index + "] [" + MEMap.Index + "] Map Name", MEMap.MapFileName.GetType(), "CONFIG:" + MEMap.MapFileName);
+                    this.m_LGPVDict["[" + MCMaplist.Index + "] [" + MEMap.Index + "] Rounds"] = new CPluginVariable("[" + MCMaplist.Index + "] [" + MEMap.Index + "] Rounds", typeof(string), "CONFIG:" + MEMap.Rounds);
+                    this.m_LGPVDict["[" + MCMaplist.Index + "] [" + MEMap.Index + "] Preset"] = new CPluginVariable("[" + MCMaplist.Index + "] [" + MEMap.Index + "] Preset", MEMap.Preset.GetType(), "CONFIG:" + MEMap.Preset);
                 }
             }
-            this.m_LGPVList.Add(new CPluginVariable("Enable debug output?", typeof(enumBoolYesNo), this.m_enDoDebugOutput));
+            this.m_LGPVDict["Enable debug output?"] = new CPluginVariable("Enable debug output?", typeof(enumBoolYesNo), this.m_enDoDebugOutput);
 
-            return this.m_LGPVList;
+            return new List<CPluginVariable>(this.m_LGPVDict.Values);
         }
 
         private void UpdateVariableLists(string strVariableName, object objValue, object objDisplayValue, string strDisplayType, string strCommand)
