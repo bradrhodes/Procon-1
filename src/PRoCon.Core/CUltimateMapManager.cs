@@ -69,8 +69,6 @@ namespace PRoConEvents
         private Dictionary<string, string[]> m_DPreset;
         private Dictionary<string, CPluginVariable> m_LGDPVDict;
         private Dictionary<string, CPluginVariable> m_LGPVDict; 
-        private List<CPluginVariable> m_LGDPVList;
-        private List<CPluginVariable> m_LGPVList;
         private bool m_blUseSystemTZ;
         private string m_strVotedMapFileName;
         private string m_strVotedGameMode;
@@ -421,8 +419,6 @@ namespace PRoConEvents
             this.m_strCurrentServerName = "";
             this.m_LGDPVDict = new Dictionary<string, CPluginVariable>();
             this.m_LGPVDict = new Dictionary<string, CPluginVariable>();
-            this.m_LGDPVList = new List<CPluginVariable>();
-            this.m_LGPVList = new List<CPluginVariable>();
             this.m_blUseSystemTZ = SecurityManager.IsGranted(new SecurityPermission(SecurityPermissionFlag.UnmanagedCode));
             this.m_strVotedMapFileName = "";
             this.m_strVotedGameMode = "";
@@ -768,7 +764,7 @@ namespace PRoConEvents
             {
                 if (this.m_enRestartNow == enumBoolYesNo.Yes)
                 {
-                    this.m_LGDPVList.Add(new CPluginVariable("    Ignore 'Switch to new map list immediately' setting for time-based changes?", typeof(enumBoolYesNo), this.m_enTimeNotNow));
+                    this.m_LGDPVDict["    Ignore 'Switch to new map list immediately' setting for time-based changes?"] = new CPluginVariable("    Ignore 'Switch to new map list immediately' setting for time-based changes?", typeof(enumBoolYesNo), this.m_enTimeNotNow);
                 }
                 this.m_LGDPVDict["    Use system/layer server time zone?"] = new CPluginVariable("* Ultimate Map Manager|    Use system/layer server time zone?", typeof(enumBoolYesNo), this.m_enUseSystemTZ);
                 if (this.m_enUseSystemTZ == enumBoolYesNo.No)
@@ -1052,7 +1048,7 @@ namespace PRoConEvents
                     this.m_enRestartNow = enumBoolYesNo.No;
                     UpdateVariableLists("Switch to new map list immediately?", this.m_enRestartNow);
                 }
-                this.m_LGDPVList = new List<CPluginVariable>();
+                this.m_LGDPVDict = new Dictionary<string, CPluginVariable>();
             }
             else if (strVariable.CompareTo("Enable server name change for each map list?") == 0 && Enum.IsDefined(typeof(enumBoolYesNo), strValue) == true)
             {
