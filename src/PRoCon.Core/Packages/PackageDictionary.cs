@@ -24,6 +24,9 @@ using System.Text;
 
 namespace PRoCon.Core.Packages {
 
+    /// <summary>
+    /// A collection for holding <see cref="Package"/> objects.
+    /// </summary>
     public class PackageDictionary : KeyedCollection<string, Package> {
 
         public PackageDictionary() {
@@ -44,6 +47,9 @@ namespace PRoCon.Core.Packages {
             }
         }
 
+        /// <summary>
+        /// Returns true if this dictionary does not include a newer version of <paramref name="package"/>.
+        /// </summary>
         public bool IsNewer(Package package) {
 
             bool isNewer = false;

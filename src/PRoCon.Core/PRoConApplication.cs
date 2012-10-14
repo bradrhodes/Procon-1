@@ -48,6 +48,9 @@ namespace PRoCon.Core {
     // This, renamed or whatever, will eventually be the core app.
     // Will contain what frmMain.cs contains/does at the moment.
 
+    /// <summary>
+    /// Main guts of the service.
+    /// </summary>
     public class PRoConApplication {
         
         public delegate void CurrentLanguageHandler(CLocalization language);
@@ -133,11 +136,17 @@ namespace PRoCon.Core {
             private set;
         }
 
+        /// <summary>
+        /// The max number of BF servers this instance can connect to.
+        /// </summary>
         public int MaxGspServers {
             get;
             private set;
         }
 
+        /// <summary>
+        /// When true, prevents ProCon from trying to update itself.
+        /// </summary>
         public bool BlockUpdateChecks {
             get;
             private set;
@@ -153,6 +162,9 @@ namespace PRoCon.Core {
             set;
         }
 
+        /// <summary>
+        /// XML document with all the configuration settings.
+        /// </summary>
         public XmlDocument ProconXml {
             get;
             private set;
@@ -189,6 +201,9 @@ namespace PRoCon.Core {
         private bool m_isCheckerRunning;
         private Thread m_thChecker;
 
+        /// <summary>
+        /// Load settings from PRoCon.xml.
+        /// </summary>
         private void GetGspSettings() {
 
             bool isEnabled = true;
@@ -198,7 +213,7 @@ namespace PRoCon.Core {
 
                 this.ProconXml = new XmlDocument();
                 this.ProconXml.Load("PRoCon.xml");
-
+                
                 XmlNodeList OptionsList = this.ProconXml.GetElementsByTagName("options");
                 if (OptionsList.Count > 0) {
                     XmlNodeList BlockUpdateChecksList = ((XmlElement)OptionsList[0]).GetElementsByTagName("blockupdatechecks");
@@ -239,7 +254,11 @@ namespace PRoCon.Core {
             }
         }
 
-        public void SaveGspSettings() {
+        /// <summary>
+        /// Write current settings to PRoCon.xml.
+        /// </summary>
+        public void SaveGspSettings()
+        {
 
             if (this.ProconXml == null) {
                 this.ProconXml = new XmlDocument();
@@ -290,6 +309,10 @@ namespace PRoCon.Core {
         }
 
 
+        /// <summary>
+        /// Returns true if any other process is running from the same path as this assembly with
+        /// the same name as this process.
+        /// </summary>
         public static bool IsProcessOpen() {
 
             int processCount = 0;
@@ -609,6 +632,9 @@ namespace PRoCon.Core {
             }
         }
 
+        /// <summary>
+        /// Writes the entire current configuration to disk.  NOT THREAD SAFE!
+        /// </summary>
         public void SaveMainConfig() {
 
             if (this.LoadingMainConfig == false && this.CurrentLanguage != null && this.OptionsSettings != null && this.Connections != null && this.HttpWebServer != null) {

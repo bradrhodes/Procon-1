@@ -26,6 +26,11 @@ using System.Text;
 namespace PRoCon {
     using Core;
     using Core.Remote;
+    
+    /// <summary>
+    /// Collection for holding <see cref="PRoConClient"/> connections.  Fires a bunch of global events
+    /// on <see cref="FrostbiteConnection"/>.
+    /// </summary>
     public class ConnectionDictionary : KeyedCollection<string, PRoConClient> {
 
         public delegate void ConnectionAlteredHandler(PRoConClient item);

@@ -26,7 +26,7 @@ using System.Net;
 namespace MaxMind
 {
 	/// <summary>
-	/// Summary description for CountryLookup.
+	/// Resolves ip addresses to the country of origin.
 	/// </summary>
 	public class CountryLookup
 	{

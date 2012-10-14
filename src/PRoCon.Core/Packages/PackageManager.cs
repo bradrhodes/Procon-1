@@ -26,6 +26,9 @@ using System.Xml;
 
 namespace PRoCon.Core.Packages {
     using PRoCon.Core.Remote;
+    /// <summary>
+    /// Controls the dynamic loading of <see cref="Package"/>s.
+    /// </summary>
     public class PackageManager {
         
         #region Constants
@@ -233,7 +236,12 @@ namespace PRoCon.Core.Packages {
 			oPackageList[row]["description"] );
         */
 
+        
         // Done here to include more information about the status and such.
+        /// <summary>
+        /// Get a json reprensentation of the current state of this <see cref="PackageManager"/>.
+        /// </summary>
+        /// <returns>A json string.</returns>
         public string RemoteToJsonString() {
 
             StringBuilder builder = new StringBuilder();

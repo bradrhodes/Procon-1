@@ -9,6 +9,10 @@ using System.Text.RegularExpressions;
 // This can be moved into .Core once the contents of PRoCon.Plugin.* have been moved to .Core.
 namespace PRoCon.Core.Options {
     using Core.Remote;
+
+    /// <summary>
+    /// Describes and manages the configuration of <see cref="PRoConApplication"/> instance.
+    /// </summary>
     public class OptionsSettings {
 
         private PRoConApplication m_praApplication;

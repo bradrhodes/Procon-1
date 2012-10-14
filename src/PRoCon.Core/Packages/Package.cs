@@ -27,6 +27,10 @@ using System.Security.Cryptography;
 using Ionic.Zip;
 
 namespace PRoCon.Core.Packages {
+
+    /// <summary>
+    /// Describes a dynamically loaded package.
+    /// </summary>
     public class Package {
 
         #region Properties
