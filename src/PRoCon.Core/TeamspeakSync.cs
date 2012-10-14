@@ -1773,6 +1773,11 @@ namespace PRoConEvents
         public void yellToPlayer(String message, Int32 duration, String player) {
             this.ExecuteCommand("procon.protected.send", "admin.yell", message, duration.ToString(), "player", player);
         }
+        /// <summary>Sends a chat message to a player in the game.</summary>
+        public void sayToPlayer(String message, String player)
+        {
+            this.ExecuteCommand("procon.protected.send", "admin.say", message, "player", player);
+        }
         /// <summary>Requests an entire punkbuster list be sent.</summary>
         public void forcePbListing() {
             this.ExecuteCommand("procon.protected.send", "punkBuster.pb_sv_command", "pb_sv_plist");
@@ -3282,6 +3287,7 @@ namespace PRoConEvents
         public void DisplayTsSquadList(string playerName)
         {
             //TODO: Implement.  
+            sayToPlayer("Be advised: This command is not yet implemented.  Out.", playerName);
         }
         /// <summary>
         /// Sets all users to have no special sync flags.  
