@@ -2004,16 +2004,19 @@ namespace PRoConEvents
                             break;
                         case Commands.SetSyncToStaging:
                             debugWrite(dbgEvents, "[Event] Processing Sync to Staging event for Player.");
+                            SetSyncToStagingFlagForPlayer((string) mCurrentAction.Argument);
                             break;
                         case Commands.SetSyncToTeam:
                             debugWrite(dbgEvents, "[Event] Processing Set Sync to Team event for Player.");
+                            SetSyncToTeamFlagForPlayer((string) mCurrentAction.Argument);
                             break;
                         case Commands.SetNoSync:
                             debugWrite(dbgEvents, "[Event] Processing Set No Sync event for Player.");
-                            SetNoSyncFlagForPlayer((string)mCurrentAction.Argument);
+                            SetNoSyncFlagForPlayer((string) mCurrentAction.Argument);
                             break; 
                         case Commands.ResetUserSyncFlags:
                             debugWrite(dbgEvents, "[Event] Processing Sync Flag Reset for Player.");
+                            ResetSyncFlagsForPlayer((string) mCurrentAction.Argument);
                             break;
                         case Commands.ResetAllUsersSyncFlags:
                             debugWrite(dbgEvents, "[Event] Resetting all player sync flags.");
@@ -2021,7 +2024,7 @@ namespace PRoConEvents
                             break;
                         case Commands.DisplayTSSquadList:
                             debugWrite(dbgEvents, "[Event] Processing DisplayTSSquadList event.");
-                            DisplayTsSquadList((string)mCurrentAction.Argument);
+                            DisplayTsSquadList((string) mCurrentAction.Argument);
                             break;
                     }
                 } catch (Exception e) {
@@ -2593,19 +2596,39 @@ namespace PRoConEvents
 
             // Consolidate master client lists and update global list.
             clientInfo.AddRange(newClientInfo);
+
+            // Update clientInfo to have the sync flags of all previously connected users.  
+            foreach(MasterClient mstClient in mClientAllInfo)
+            {
+                foreach(MasterClient innerClient in clientInfo)
+                {
+                    if (mstClient.HasGmClient && innerClient.HasGmClient)
+                    {
+                        if (mstClient.GmClient.Name == innerClient.GmClient.Name)
+                        {
+                            innerClient.IsSyncToTeam = mstClient.IsSyncToTeam;
+                            innerClient.IsSyncToStaging = mstClient.IsSyncToStaging;
+                            innerClient.IsNoSync = mstClient.IsNoSync;
+                            break;
+                        }
+                    }
+                }
+            }
+
             mClientAllInfo = clientInfo;
 
 
             // Debug player information print.
             debugWrite(dbgClients, "[Clients] Result of Master Client Update:");
             foreach (MasterClient mstClient in mClientAllInfo)
-                debugWrite(dbgClients, "- TS Client [Ip: {0}, Channel: {1}, Name: {2}] / GM Client [Ip: {3}, Team: {4}, Name: {5}]",
+                debugWrite(dbgClients, "- TS Client [Ip: {0}, Channel: {1}, Name: {2}] / GM Client [Ip: {3}, Team: {4}, Name: {5}] / Nosync: {6}, SyncTeam: {7}, SyncStaging: {8}",
                                 (mstClient.HasTsClient) ? mstClient.TsClient.advIpAddress                  : "Null_IP",
                                 (mstClient.HasTsClient) ? mstClient.TsClient.medChannelId.Value.ToString() : "Null_Channel",
                                 (mstClient.HasTsClient) ? mstClient.TsClient.tsName                        : "Null_Name",
                                 (mstClient.HasGmClient) ? ((mstClient.GmClient.HasPbInfo) ? mstClient.GmClient.IP : "Null_IP") : "Null_IP",
                                 (mstClient.HasGmClient) ? mstClient.GmClient.TeamId.ToString()                    : "Null_Team",
-                                (mstClient.HasGmClient) ? mstClient.GmClient.Name                                 : "Null_Name"
+                                (mstClient.HasGmClient) ? mstClient.GmClient.Name                                 : "Null_Name",
+                                mstClient.IsNoSync, mstClient.IsSyncToTeam, mstClient.IsSyncToStaging
                             );
         }
 
@@ -2615,6 +2638,7 @@ namespace PRoConEvents
         /// <param name="client">The client to check.</param>
         public void checkClientForSwap(MasterClient client)
         {
+            debugWrite(dbgClients, "[Clients] - Flags state of client {0}: {1}, {2}, {3}", client.GmClient.Name, client.IsNoSync, client.IsSyncToStaging, client.IsSyncToTeam);
             // Do not proceed if the client is not in either server or if the client is a spectator or if the client is marked as No Sync
             if (!client.HasGmClient || !client.HasTsClient || client.GmClient.TeamId == 0 || client.IsNoSync)
                 return;
@@ -3293,6 +3317,7 @@ namespace PRoConEvents
                 user.IsSyncToTeam = false;
                 user.IsSyncToStaging = false;
                 user.IsNoSync = false;
+                debugWrite(dbgClients, "[Clients] - Flags state of client {0}: {1}, {2}, {3}", user.GmClient.Name, user.IsNoSync, user.IsSyncToStaging, user.IsSyncToTeam);
             }
         }
         /// <summary>Sets the NoSync flag for a player on the server.  This player will be ignored by Teamsync until the next round or until the flag is reset. </summary>
@@ -3305,6 +3330,7 @@ namespace PRoConEvents
                     user.IsNoSync = true;
                     user.IsSyncToStaging = false;
                     user.IsSyncToTeam = false;
+                    debugWrite(dbgClients, "[Clients] - Flags state of client {0}: {1}, {2}, {3}", user.GmClient.Name, user.IsNoSync, user.IsSyncToStaging, user.IsSyncToTeam);
                     break;
                 }
             }
@@ -3320,6 +3346,7 @@ namespace PRoConEvents
                     user.IsSyncToTeam = true;
                     user.IsSyncToStaging = false;
                     addToActionQueue(Commands.CheckClientForSwapping, user);
+                    debugWrite(dbgClients, "[Clients] - Flags state of client {0}: {1}, {2}, {3}", user.GmClient.Name, user.IsNoSync, user.IsSyncToStaging, user.IsSyncToTeam);
                     break;
                 }
             }
@@ -3336,6 +3363,7 @@ namespace PRoConEvents
                     user.IsSyncToTeam = false;
                     user.IsSyncToStaging = true;
                     addToActionQueue(Commands.CheckClientForSwapping, user);
+                    debugWrite(dbgClients, "[Clients] - Flags state of client {0}: {1}, {2}, {3}", user.GmClient.Name, user.IsNoSync, user.IsSyncToStaging, user.IsSyncToTeam);
                     break;
                 }
             }
@@ -3351,7 +3379,9 @@ namespace PRoConEvents
                     user.IsNoSync = false;
                     user.IsSyncToTeam = false;
                     user.IsSyncToStaging = false;
+
                     addToActionQueue(Commands.CheckClientForSwapping, user);
+                    debugWrite(dbgClients, "[Clients] - Flags state of client {0}: {1}, {2}, {3}", user.GmClient.Name, user.IsNoSync, user.IsSyncToStaging, user.IsSyncToTeam);
                     break;
                 }
             }
