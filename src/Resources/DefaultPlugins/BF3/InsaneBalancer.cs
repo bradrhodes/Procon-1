@@ -14,6 +14,7 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Reflection;
 using System.Collections.Generic;
@@ -107,6 +108,15 @@ namespace PRoConEvents {
 
         public enum PlayerState { dead, alive, left, kicked, limbo };
         public enum MessageType { say, invalid };
+
+
+        Dictionary<String, PlayerProfile> new_players_batch = new Dictionary<string, PlayerProfile>();
+
+        Object mutex = new Object();
+        EventWaitHandle scratch_handle = new EventWaitHandle(false, EventResetMode.ManualReset);
+
+        Object info_mutex = new Object();
+
         #endregion
 
         #region Inner Classes
@@ -1952,6 +1962,352 @@ namespace PRoConEvents {
             addPluginCallTask("InsaneBalancer", "ticks", 0, 1, -1);
             initializeBalancer();
         }
+
+        public void OnPluginDisable()
+        {
+
+            plugin_enabled = false;
+
+            unloadSettings();
+
+            DebugWrite("signaling stats fetching thread to stop", 1);
+            wake_handle.Set();
+            scratch_handle.Set();
+            DebugWrite("^b^1Disabled =(^0", 1);
+
+        }
+
+        public List<CPluginVariable> GetDisplayPluginVariables()
+        {
+            List<CPluginVariable> lstReturn = new List<CPluginVariable>();
+
+
+
+            //lstReturn.Add(new CPluginVariable("Settings|Refresh", typeof(string), "| edit this field to refresh settings |"));
+
+            List<string> vars = getPluginVars(true);
+
+
+
+
+
+            foreach (string var_name in vars)
+            {
+                String group_name = getPluginVariableGroup(var_name);
+                String var_type = "string";
+                String var_value = getPluginVarValue(var_name);
+                int group_order = getGroupOrder(group_name);
+
+                if (shouldSkipGroup(group_name))
+                    continue;
+
+                if (shouldSkipVariable(var_name))
+                    continue;
+
+                if (var_name.Equals("live_sort") || var_name.Equals("round_sort"))
+                    var_type = "enum." + var_name + "(" + String.Join("|", getAllowedSorts().ToArray()) + ")";
+                else if (var_name.Equals("pass"))
+                    var_value = Regex.Replace(getPluginVarValue(var_name), @".", "*");
+
+                lstReturn.Add(new CPluginVariable(group_order + ". " + group_name + "|" + var_name, var_type, var_value));
+            }
+
+            return lstReturn;
+        }
+
+        public List<CPluginVariable> GetPluginVariables() {
+            List<CPluginVariable> lstReturn = new List<CPluginVariable>();
+
+            List<string> vars = getPluginVars();
+            foreach (string var in vars)
+                lstReturn.Add(new CPluginVariable(var, typeof(string), getPluginVarValue(var)));
+
+            return lstReturn;
+        }
+
+        public void SetPluginVariable(string var, string val)
+        {
+            //ConsoleWrite("setting " + var + " to " + val);
+            if (var.ToLower().Contains("refresh"))
+                return;
+
+            setPluginVarValue(var, val);
+        }
+
+        #endregion
+
+        #region PRoConPluginAPI Overrides
+        public override void OnPlayerJoin(string strSoldierName)
+        {
+            battleLogConnect();
+        }
+
+        public override void OnPlayerKilled(Kill killInfo)
+        {
+
+            if (killInfo == null)
+                return;
+
+            CPlayerInfo killer = killInfo.Killer;
+            CPlayerInfo victim = killInfo.Victim;
+
+            PlayerProfile vp = getPlayerProfile(victim.SoldierName);
+            PlayerProfile kp = getPlayerProfile(killer.SoldierName);
+
+            if (vp != null)
+            {
+                vp.state = PlayerState.dead;
+                vp.updateInfo(victim);
+                vp.updateLastDeath();
+
+                if (vp.getDelayedTeamId() > 0)
+                {
+                    DebugWrite("Player " + vp + " has died, he was flagged to be moved to ^bDTeam(" + TN(vp.getDelayedTeamId()) + ").DSquad(" + SQN(vp.getDelayedSquadId()) + ")^n", 3);
+                    /* do not skip the balance check, this is delayed move, teams may already be balanced */
+                    enforceDelayedMove(vp);
+                }
+            }
+
+            if (kp != null)
+            {
+                kp.updateInfo(killer);
+                kp.updateLastKill();
+            }
+        }
+
+        public override void OnPlayerKickedByAdmin(string soldierName, string reason)
+        {
+            PlayerProfile player = getPlayerProfile(soldierName);
+            if (player != null)
+            {
+                player.state = PlayerState.kicked;
+                this.players.Remove(player.name);
+            }
+        }
+
+        public override void OnPlayerKilledByAdmin(string soldierName)
+        {
+            PlayerProfile player = getPlayerProfile(soldierName);
+            if (player == null)
+                return;
+
+            player.state = PlayerState.dead;
+            player.updateLastDeath();
+
+            if (player.getDelayedTeamId() > 0)
+            {
+                DebugWrite("Player " + player + " has been killed by admin, and he was flagged to be moved to ^bDTeam(" + TN(player.getDelayedTeamId()) + ").DSquad(" + SQN(player.getDelayedSquadId()) + ")^n", 3);
+                /* do not skip the balance check, this is delayed move, teams may already be balanced */
+                enforceDelayedMove(player);
+            }
+        }
+
+        public override void OnPlayerMovedByAdmin(string soldierName, int destinationTeamId, int destinationSquadId, bool forceKilled)
+        {
+            PlayerProfile player = getPlayerProfile(soldierName);
+            if (player == null)
+                return;
+
+            player.setMovingByAdmin(true);
+            player.state = PlayerState.dead;
+            // jstmx: have to reset delayed and saved things
+            if (player.getDelayedTeamId() > 0)
+            {
+                player.resetDelayedTeamSquad();
+                player.resetSavedTeamSquad();
+            }
+        }
+
+        public override void OnGlobalChat(string strSpeaker, string strMessage)
+        {
+            if (isInGameCommand(strMessage))
+                inGameCommand(strSpeaker, strMessage);
+
+            PlayerProfile player = getPlayerProfile(strSpeaker);
+            if (player != null)
+                player.updateLastChat();
+        }
+
+        public override void OnTeamChat(string strSpeaker, string strMessage, int iTeamID)
+        {
+            if (isInGameCommand(strMessage))
+                inGameCommand(strSpeaker, strMessage);
+
+            PlayerProfile player = getPlayerProfile(strSpeaker);
+            if (player != null)
+                player.updateLastChat();
+        }
+
+        public override void OnSquadChat(string strSpeaker, string strMessage, int iTeamID, int iSquadID)
+        {
+            if (isInGameCommand(strMessage))
+                inGameCommand(strSpeaker, strMessage);
+
+            PlayerProfile player = getPlayerProfile(strSpeaker);
+            if (player != null)
+                player.updateLastChat();
+        }
+
+        public override void OnLevelStarted() {
+            DebugWrite("Level starting!", 0);
+            level_started = true;               
+        }
+
+        public override void OnLevelLoaded(string mapFileName, string Gamemode, int roundsPlayed, int roundsTotal) {
+            max_round_tickets = 0;
+            DebugWrite("Detected GameMode : " + Gamemode, 1);
+            //Disabling balancer for SQDM modes
+            if (modes[Gamemode.ToLower()].Equals("sqdm")) {
+                DebugWrite("Disabling balancer for : " + Gamemode, 1);
+                startStopState("admin", utc);
+            } else {
+                DebugWrite("Check enabling balancer for : " + Gamemode, 1);
+                startWaitState(utc);
+            }
+        }
+
+        public override void OnServerInfo(CServerInfo csiServerInfo)
+        {
+            int max_tickets;
+            lock (info_mutex)
+            {
+                this.serverInfo = csiServerInfo;
+                string gamemode = serverInfo.GameMode.ToLower();
+
+                // first goes logic for conquests
+                if (!modes[gamemode].Equals("tdm") && !modes[gamemode].Equals("tdmcq"))
+                    max_tickets = this.serverInfo.TeamScores[0].Score;
+                else
+                    max_tickets = this.serverInfo.TeamScores[0].WinningScore;
+            }
+            if (max_tickets > max_round_tickets)
+                max_round_tickets = max_tickets;
+            DebugWrite("max round tickets : " + max_round_tickets, 1);
+        }
+
+        public override void OnPlayerTeamChange(string soldierName, int teamId, int squadId)
+        {
+
+            int oldteamId, oldsquadId;
+            PlayerProfile player = getPlayerProfile(soldierName);
+            if (player == null)
+                return;
+
+            oldteamId = player.getTeamId();
+            oldsquadId = player.getSquadId();
+            player.state = PlayerState.dead;
+            //Need to save old teamId
+            player.saveTargetTeamSquad();
+
+            player.setTeamId(teamId);
+            player.setSquadId(squadId);
+            // jstmx: have to reset delayed and saved things
+            player.resetDelayedTeamSquad();
+            player.resetSavedTeamSquad();
+
+        }
+
+        public override void OnPlayerSquadChange(string strSoldierName, int iTeamID, int iSquadID)
+        {
+            PlayerProfile player = getPlayerProfile(strSoldierName);
+            if (player == null)
+                return;
+
+            //Need to count players before set new Team for the current player!!
+            Dictionary<int, int> player_count = getPlayerCount();
+
+            int oldteamId, oldsquadId;
+
+            oldteamId = player.getTargetTeamId();
+            oldsquadId = player.getTargetSquadId();
+
+            player.setTeamId(iTeamID);
+            player.setSquadId(iSquadID);
+            // jstmx: have to reset delayed and saved things
+            player.resetDelayedTeamSquad();
+            player.resetSavedTeamSquad();
+            player.resetTargetTeamSquad();
+
+            if (round_balancer || oldteamId <= 0 || oldteamId == iTeamID || player.isMovingByAdmin())
+            {
+                player.setMovingByAdmin(false);
+                return;
+            }
+
+            //Finding loosing team
+            int loosingTeamId = getLoosingTeamId();
+
+            // We have to check if one is allowed to change loosing team after ticket threshold
+            if (player.getTeamId() > 0 && oldteamId != iTeamID && checkTicketThreshold() && getBooleanVarValue("disable_team_change") && loosingTeamId == oldteamId)
+            {
+                SendPlayerMessage(player.name, "Warning! You are not allowed to change loosing team after ticket threshold : " + getIntegerVarValue("ticket_threshold").ToString());
+                DebugWrite("Player " + player.name + " tryes to change loosing team after ticked threshold reached!", 1);
+                bool original_value = this.virtual_mode;
+                this.virtual_mode = false;
+                player.setMovingByAdmin(true);
+                movePlayer(player, oldteamId, oldsquadId, false, false);
+                player.setMovingByAdmin(false);
+                this.virtual_mode = original_value;
+            }
+
+        }
+
+        public override void OnRoundOver(int iWinningTeamID)
+        {
+            round_balancer = checkRoundBalance();
+            win_teamId = iWinningTeamID;
+            lose_teamId = getOpposingTeamId(win_teamId);
+            level_started = false;
+
+            if (!getBooleanVarValue("balance_round"))
+            {
+                DebugWrite("round-over, but ^bbalance_round^n is not enabled", 1);
+                round_balancer = false;
+                return;
+            }
+
+
+            DebugWrite("round-over, waiting for ^b" + getIntegerVarValue("round_wait_time") + "^n seconds", 1);
+            Thread sleeper = new Thread(new ThreadStart(delayedRoundBalance));
+            sleeper.Start();
+
+        }
+
+        public override void OnPlayerSpawned(string soldierName, Inventory spawnedInventory)
+        {
+            PlayerProfile player = getPlayerProfile(soldierName);
+            if (player != null)
+            {
+                player.updateLastSpawn();
+                player.state = PlayerState.alive;
+            }
+        }
+
+        public override void OnPunkbusterPlayerInfo(CPunkbusterInfo cpbiPlayer)
+        {
+
+            if (cpbiPlayer == null)
+                return;
+
+            processNewPlayer(cpbiPlayer);
+        }
+
+        public override void OnListPlayers(List<CPlayerInfo> lstPlayers, CPlayerSubset cpsSubset)
+        {
+            if (cpsSubset.Subset != CPlayerSubset.PlayerSubsetType.All)
+                return;
+
+            updateQueues(lstPlayers);
+            syncPlayersList(lstPlayers);
+
+            /* fail safe to get the maximum number of players in server */
+            if (lstPlayers.Count > max_player_count)
+                max_player_count = lstPlayers.Count;
+
+
+            if (check_state_phase == 1)
+                startCheckState(utc);
+        }
         #endregion
 
         #region Methods
@@ -1965,6 +2321,109 @@ namespace PRoConEvents {
             this.players.Clear();
             removeTask("InsaneBalancer");
             attempts = 0;
+        }
+        #endregion
+
+        #region Stats Fetching Thread
+        public void stats_fetching_loop()
+        {
+            DebugWrite("Starting stats fetching thread", 1);
+            getPlayerList();
+            while (true)
+            {
+                if (new_player_queue.Count == 0)
+                {
+                    // if there are no more players, put yourself to sleep
+                    DebugWrite("No new players, stats fetching thread going to sleep", 1);
+                    wake_handle.Reset();
+                    wake_handle.WaitOne();
+                    DebugWrite("Stats fetching thread is now awake!", 1);
+                }
+
+
+                InsaneBalancer plugin = this;
+
+                while (new_player_queue.Count > 0)
+                {
+                    if (!plugin_enabled)
+                        break;
+
+                    List<String> keys = new List<string>(new_player_queue.Keys);
+
+                    String name = keys[keys.Count - 1];
+
+                    CPunkbusterInfo info = null;
+                    new_player_queue.TryGetValue(name, out info);
+
+                    if (info == null)
+                        continue;
+
+                    // make sure I am the only one modifying these dictionarie at this time
+                    lock (mutex)
+                    {
+                        if (new_player_queue.ContainsKey(name))
+                            new_player_queue.Remove(name);
+
+                        if (!new_players_batch.ContainsKey(name))
+                            new_players_batch.Add(name, null);
+                    }
+
+                    String msg = new_player_queue.Count + " more player" + ((new_player_queue.Count > 1) ? "s" : "") + " in queue";
+                    if (new_player_queue.Count == 0)
+                        msg = "no more players in queue";
+
+                    plugin.DebugWrite("Getting battlelog stats for ^b" + name + "^n, " + msg, 1);
+                    if (new_players_batch.ContainsKey(info.SoldierName))
+                        new_players_batch[name] = new PlayerProfile(plugin, info);
+                }
+
+                // abort the thread if the plugin was disabled
+                if (!plugin_enabled)
+                {
+                    plugin.DebugWrite("detected that plugin was disabled, aborting stats fetching thread", 1);
+                    lock (mutex)
+                    {
+                        new_player_queue.Clear();
+                        new_players_batch.Clear();
+                        scratch_list.Clear();
+                    }
+                    return;
+                }
+
+                DebugWrite("Done fetching stats, " + new_players_batch.Count + " player" + ((new_players_batch.Count > 1) ? "s" : "") + " in new batch, waiting for players list now", 1);
+                scratch_handle.Reset();
+                getPlayerList();
+                scratch_handle.WaitOne();
+                scratch_handle.Reset();
+                lock (mutex)
+                {
+                    // remove the nulls, and the ones that left
+                    List<String> players_to_remove = new List<string>();
+                    foreach (KeyValuePair<String, PlayerProfile> pair in new_players_batch)
+                        if (pair.Value == null || !scratch_list.Contains(pair.Key))
+                            if (!players_to_remove.Contains(pair.Key))
+                            {
+                                DebugWrite("Looks like ^b" + pair.Key + "^n left, removing him from new batch", 3);
+                                players_to_remove.Add(pair.Key);
+                            }
+
+
+                    // now remove them
+                    foreach (String pname in players_to_remove)
+                        if (new_players_batch.ContainsKey(pname))
+                            new_players_batch.Remove(pname);
+
+                    if (new_players_batch.Count > 0)
+                        DebugWrite("Queue exhausted, will insert now a batch of " + new_players_batch.Count + " player" + ((new_players_batch.Count > 1) ? "s" : ""), 1);
+                    foreach (KeyValuePair<String, PlayerProfile> pair in new_players_batch)
+                        if (pair.Value != null && scratch_list.Contains(pair.Key))
+                            plugin.players.Add(pair.Key, pair.Value);
+
+                    new_players_batch.Clear();
+                }
+
+            }
+
         }
         #endregion
 
@@ -2181,6 +2640,47 @@ namespace PRoConEvents {
 
         #region Squad Sorting
 
+        private string getSortFieldValueStr(PlayerSquad squad, string phase)
+        {
+            string sort_method = getStringVarValue(phase);
+
+            if (sort_method.CompareTo("kdr_asc_round") == 0 || sort_method.CompareTo("kdr_desc_round") == 0)
+                return "kdr_round: " + Math.Round(squad.getRoundKdr(), 2);
+            else if (sort_method.CompareTo("score_asc_round") == 0 || sort_method.CompareTo("score_desc_round") == 0)
+                return "score_round: " + Math.Round(squad.getRoundScore(), 2);
+            else if (sort_method.CompareTo("spm_asc_round") == 0 || sort_method.CompareTo("spm_desc_round") == 0)
+                return "spm_round: " + Math.Round(squad.getRoundSpm(), 2);
+            else if (sort_method.CompareTo("kpm_asc_round") == 0 || sort_method.CompareTo("kpm_desc_round") == 0)
+                return "kpm_round: " + Math.Round(squad.getRoundKpm(), 2);
+            else if (sort_method.CompareTo("time_asc_round") == 0 || sort_method.CompareTo("time_desc_round") == 0)
+                return "time_round: " + squad.getRoundTime();
+            else if (sort_method.CompareTo("random_value") == 0 || sort_method.CompareTo("random_value") == 0)
+                return "random_value: " + squad.getRandomValue();
+            else if (sort_method.CompareTo("kdr_asc_online") == 0 || sort_method.CompareTo("kdr_desc_online") == 0)
+                return "kdr_online: " + Math.Round(squad.getOnlineKdr(), 2);
+            else if (sort_method.CompareTo("kpm_asc_online") == 0 || sort_method.CompareTo("kpm_desc_online") == 0)
+                return "kpm_online: " + Math.Round(squad.getOnlineKpm(), 2);
+            else if (sort_method.CompareTo("spm_asc_online") == 0 || sort_method.CompareTo("spm_desc_online") == 0)
+                return "spm_online: " + Math.Round(squad.getOnlineSpm(), 2);
+            else if (sort_method.CompareTo("kills_asc_online") == 0 || sort_method.CompareTo("kills_desc_online") == 0)
+                return "kills_online: " + Math.Round(squad.getOnlineKills(), 2);
+            else if (sort_method.CompareTo("deaths_asc_online") == 0 || sort_method.CompareTo("deaths_desc_online") == 0)
+                return "deaths_online: " + Math.Round(squad.getOnlineDeaths(), 2);
+            else if (sort_method.CompareTo("skill_asc_online") == 0 || sort_method.CompareTo("skill_desc_online") == 0)
+                return "skill_online: " + Math.Round(squad.getOnlineSkill(), 2);
+            else if (sort_method.CompareTo("quits_asc_online") == 0 || sort_method.CompareTo("quits_desc_online") == 0)
+                return "quits_online: " + Math.Round(squad.getOnlineQuits(), 2);
+            else if (sort_method.CompareTo("accuracy_asc_online") == 0 || sort_method.CompareTo("accuracy_desc_online") == 0)
+                return "accuracy_online: " + Math.Round(squad.getOnlineAccuracy(), 2);
+            else if (sort_method.CompareTo("score_asc_online") == 0 || sort_method.CompareTo("score_desc_online") == 0)
+                return "score_online: " + Math.Round(squad.getOnlineScore(), 2);
+            else if (sort_method.CompareTo("rank_asc_online") == 0 || sort_method.CompareTo("rank_desc_online") == 0)
+                return "rank_online: " + Math.Round(squad.getOnlineRank(), 2);
+
+            DebugWrite("^1^bWARNING^0^n: cannot find squad sort method for ^b" + sort_method + "^0", 1);
+            return "";
+        }
+
         #region Using Online Stats
         private int squad_kdr_asc_online_cmp(PlayerSquad left, PlayerSquad right) {
             double lval = left.getOnlineKdr();
@@ -2359,6 +2859,48 @@ namespace PRoConEvents {
         #endregion
 
         #region Player Sorting
+
+        private string getSortFieldValueStr(PlayerProfile player, string phase)
+        {
+            string sort_method = getStringVarValue(phase);
+
+            if (sort_method.CompareTo("kdr_asc_round") == 0 || sort_method.CompareTo("kdr_desc_round") == 0)
+                return "kdr_round: " + Math.Round(player.getRoundKdr(), 2);
+            else if (sort_method.CompareTo("score_asc_round") == 0 || sort_method.CompareTo("score_desc_round") == 0)
+                return "score_round: " + Math.Round(player.getRoundScore(), 2);
+            else if (sort_method.CompareTo("spm_asc_round") == 0 || sort_method.CompareTo("spm_desc_round") == 0)
+                return "spm_round: " + Math.Round(player.getRoundSpm(), 2);
+            else if (sort_method.CompareTo("kpm_asc_round") == 0 || sort_method.CompareTo("kpm_desc_round") == 0)
+                return "kpm_round: " + Math.Round(player.getRoundKpm(), 2);
+            else if (sort_method.CompareTo("time_asc_round") == 0 || sort_method.CompareTo("time_desc_round") == 0)
+                return "time_round: " + player.getRoundTime();
+            else if (sort_method.CompareTo("random_value") == 0 || sort_method.CompareTo("random_value") == 0)
+                return "random_value: " + player.getRandomValue();
+            else if (sort_method.CompareTo("kdr_asc_online") == 0 || sort_method.CompareTo("kdr_desc_online") == 0)
+                return "kdr_online: " + Math.Round(player.getOnlineKdr(), 2);
+            else if (sort_method.CompareTo("kpm_asc_online") == 0 || sort_method.CompareTo("kpm_desc_online") == 0)
+                return "kpm_online: " + Math.Round(player.getOnlineKpm(), 2);
+            else if (sort_method.CompareTo("spm_asc_online") == 0 || sort_method.CompareTo("spm_desc_online") == 0)
+                return "spm_online: " + Math.Round(player.getOnlineSpm(), 2);
+            else if (sort_method.CompareTo("kills_asc_online") == 0 || sort_method.CompareTo("kills_desc_online") == 0)
+                return "kills_online: " + player.getOnlineKills();
+            else if (sort_method.CompareTo("deaths_asc_online") == 0 || sort_method.CompareTo("deaths_desc_online") == 0)
+                return "deaths_online: " + player.getOnlineDeaths();
+            else if (sort_method.CompareTo("skill_asc_online") == 0 || sort_method.CompareTo("skill_desc_online") == 0)
+                return "skill_online: " + Math.Round(player.getOnlineSkill(), 2);
+            else if (sort_method.CompareTo("quits_asc_online") == 0 || sort_method.CompareTo("quits_desc_online") == 0)
+                return "quits_online: " + Math.Round(player.getOnlineQuits(), 2);
+            else if (sort_method.CompareTo("accuracy_asc_online") == 0 || sort_method.CompareTo("accuracy_desc_online") == 0)
+                return "accuracy_online: " + Math.Round(player.getOnlineAccuracy(), 2);
+            else if (sort_method.CompareTo("score_asc_online") == 0 || sort_method.CompareTo("score_desc_online") == 0)
+                return "score_online: " + player.getOnlineScore();
+            else if (sort_method.CompareTo("rank_asc_online") == 0 || sort_method.CompareTo("rank_desc_online") == 0)
+                return "rank_online: " + player.getOnlineRank();
+
+            DebugWrite("^1^bWARNING^0^n: cannot find player sort method for ^b" + sort_method + "^0", 1);
+            return "";
+        }
+
         /* Player sort methodsd based on online stats */
         private int player_kdr_asc_online_cmp(PlayerProfile left, PlayerProfile right) {
             double lval = left.getOnlineKdr();
@@ -2938,6 +3480,151 @@ namespace PRoConEvents {
             return sum;
         }
 
+        private int getNextFreeClanSquadId(Dictionary<string, List<PlayerSquad>> clan_squads) {
+            int count = 1;
+            foreach (KeyValuePair<string, List<PlayerSquad>> pair in clan_squads)
+                foreach (PlayerSquad squad in pair.Value)
+                    count++;
+
+            return 16 + count;
+        }
+
+        private void getClanStats(List<PlayerProfile> members, Dictionary<string, int> stats) {
+            foreach (PlayerProfile player in members) {
+                if (!player.isInClan())
+                    continue;
+
+                string tag = player.getClanTag();
+
+                if (!stats.ContainsKey(tag))
+                    stats[tag] = 0;
+
+                stats[tag]++;
+            }
+        }
+
+        private void getClanStatsByTeam(List<PlayerProfile> members, Dictionary<string, int>[] stats) {
+            for (int i = 0; i < members.Count; i++) {
+                PlayerProfile player = members[i];
+                if (!player.isInClan())
+                    continue;
+
+                string tag = player.getClanTag();
+                int teamId = player.getTeamId();
+                int oppositeTeamId = getOpposingTeamId(teamId);
+
+                if (!stats[teamId].ContainsKey(tag))
+                    stats[teamId].Add(tag, 0);
+
+                if (!stats[oppositeTeamId].ContainsKey(tag))
+                    stats[oppositeTeamId].Add(tag, 0);
+
+
+                stats[teamId][tag]++;
+            }
+        }
+
+
+        private int getSmallTeamId(int team1Id, int team1Count, int team2Id, int team2Count) {
+            return (team1Count < team2Count) ? team1Id : team2Id;
+        }
+
+        private int getBigTeamId(int team1Id, int team1Count, int team2Id, int team2Count) {
+            return (team1Count > team2Count) ? team1Id : team2Id;
+        }
+
+        private int getOpposingTeamId(int teamId) {
+            return (teamId == 0) ? teamId : (teamId == 1) ? 2 : 1;
+        }
+
+        private bool shouldSkipClanSquad(PlayerSquad squad, int smaller_team, int bigger_team, Dictionary<string, int>[] clan_stats) {
+            int squad_sz = squad.getCount();
+            string tag = squad.getMajorityClanTag();
+
+            if (tag.Length > 0 && (clan_stats[bigger_team][tag] + clan_stats[smaller_team][tag]) > 1) {
+                if (clan_stats[bigger_team][tag] >= clan_stats[smaller_team][tag]) {
+                    DebugWrite("Skipping clan-squad " + squad.ToString() + " because majority of clan is in same team", 3);
+                    return true;
+                }
+
+                /* update clan stats */
+                clan_stats[bigger_team][tag] -= squad_sz;
+                clan_stats[smaller_team][tag] += squad_sz;
+            }
+
+            return false;
+        }
+
+        private bool shouldSkipClanPlayer(PlayerProfile player, int smaller_team, int bigger_team, Dictionary<string, int>[] clan_stats) {
+            string tag = player.getClanTag();
+
+            if (!clan_stats[bigger_team].ContainsKey(tag))
+                clan_stats[bigger_team].Add(tag, 0);
+
+            if (!clan_stats[smaller_team].ContainsKey(tag))
+                clan_stats[smaller_team].Add(tag, 0);
+
+            if (player.isInClan() && (clan_stats[bigger_team][tag] + clan_stats[smaller_team][tag]) > 1) {
+                /* if the majority of the players in the clan are in this team, skip this player */
+                if (clan_stats[bigger_team][tag] >= clan_stats[smaller_team][tag]) {
+                    DebugWrite("Skipping clan-player ^b" + player + "^n because majority of clan is in his team", 3);
+                    return true;
+                }
+
+                /* update the clan stats */
+                clan_stats[bigger_team][tag]--;
+                clan_stats[smaller_team][tag]++;
+            }
+            return false;
+        }
+
+        private bool isInMoveWhiteList(PlayerProfile player) {
+            bool result = isPlayerInWhiteList(player, "player_safe_wlist") || isPlayerInWhiteList(player, "clan_safe_wlist");
+
+            if (getBooleanVarValue("use_extra_white_lists"))
+                result |= isPlayerInWhiteList(player, "player_move_wlist") || isPlayerInWhiteList(player, "clan_move_wlist");
+
+            return result;
+        }
+
+        private bool isInKickWhiteList(PlayerProfile player) {
+            bool result = isPlayerInWhiteList(player, "player_safe_wlist") || isPlayerInWhiteList(player, "clan_safe_wlist");
+
+            if (getBooleanVarValue("use_extra_white_lists"))
+                result |= isPlayerInWhiteList(player, "player_kick_wlist") || isPlayerInWhiteList(player, "clan_kick_wlist");
+
+            return result;
+        }
+
+        private bool isPlayerInWhiteList(PlayerProfile player, String list_name) {
+            if (!getBooleanVarValue("use_white_list"))
+                return false;
+
+            if (!getPluginVars().Contains(list_name)) {
+                DebugWrite("^1^bWARNING: ^n^0 unknown white list ^b" + list_name + "^n", 1);
+                return false;
+            }
+
+            List<String> whitelist = getStringListVarValue(list_name);
+            if (whitelist.Count == 0)
+                return false;
+
+            String field = "";
+            if (Regex.Match(list_name, @"clan").Success)
+                field = player.getClanTag();
+            else if (Regex.Match(list_name, @"player").Success)
+                field = player.name;
+            else {
+                DebugWrite("^1^bWARNING:^0^n white list ^b" + list_name + "^n does not contain 'player' or 'clan' sub-string", 1);
+                return false;
+            }
+
+            if (Regex.Match(field, @"^\s*$").Success)
+                return false;
+
+            return whitelist.Contains(field);
+        }
+
         #endregion
 
         #region Player List Lamdas
@@ -3049,7 +3736,7 @@ namespace PRoConEvents {
         }
         #endregion
 
-        #region Things that manipulate the Battlefield server.
+        #region Things that manipulate the Battlefield server
 
         #region Directly
         /// <summary>
@@ -3384,7 +4071,7 @@ namespace PRoConEvents {
             }
 
             return players_moved;
-        }#endregion
+        }
 
         /// <summary>
         /// Distribute the players in a squad amoungst the other squads on the same team that are in <paramref name="squads"/>.  
@@ -3456,6 +4143,8 @@ namespace PRoConEvents {
         private void fixSquads() {
 
         }
+
+        #endregion
 
         #endregion
 
@@ -3991,7 +4680,46 @@ namespace PRoConEvents {
             sleep = false;
         }
 
-        private void balanceLive(DateTime now) {
+        public void delayedRoundBalance()
+        {
+
+            bool original_state = getBooleanVarValue("balance_live");
+
+            if (original_state)
+            {
+                DebugWrite("Temporarily disabling live balancer, for round-over", 1);
+                setBooleanVarValue("balance_live", false);
+            }
+
+            try
+            {
+                wait_state = true;
+                Thread.Sleep(getIntegerVarValue("round_wait_time") * 1000);
+                wait_state = false;
+
+                DebugWrite("round-over, ^b" + getIntegerVarValue("round_wait_time") + "^n seconds wait time expired", 1);
+                if (round_balancer)
+                    balanceRound(win_teamId);
+                restartWaitState(utc);
+                resetPlayerStats();
+                round_balancer = false;
+
+            }
+            catch (Exception e)
+            {
+                dump_exception(e);
+            }
+
+
+            if (original_state)
+            {
+                DebugWrite("Re-enabling live balancing", 1);
+                setBooleanVarValue("balance_live", true);
+            }
+        }
+
+        private void balanceLive(DateTime now)
+        {
             balanceLive(now, false);
         }
 
@@ -4097,124 +4825,9 @@ namespace PRoConEvents {
                 dump_exception(e);
             }
         }
-        #endregion
 
-        #endregion
-
-
-
-
-
-
-        private void getClanSquads(List<PlayerProfile> members, Dictionary<string, List<PlayerSquad>> clan_squads, Dictionary<string, int> clan_stats) {
-            int neutralTeamId = 0;
-            int noSquadId = 0;
-            int max_squad_size = 4;
-            int max_squads = 16;
-
-            members.RemoveAll(delegate(PlayerProfile player) {
-                /* if player is not in a clan, ignore it*/
-                if (!player.isInClan())
-                    return false;
-
-
-
-                string tag = player.getClanTag();
-
-                /* if less than two players for the clan, ignore it */
-
-                if (clan_stats[tag] < 2)
-                    return false;
-
-                /* count total number of squads */
-                int total = 0;
-                foreach (KeyValuePair<string, List<PlayerSquad>> pair in clan_squads)
-                    total += pair.Value.Count;
-
-                if (!clan_squads.ContainsKey(tag))
-                    clan_squads[tag] = new List<PlayerSquad>();
-
-                List<PlayerSquad> squads = clan_squads[tag];
-
-                /* if there is no squads, of they are all full, add a new at the end */
-                if (squads.Count == 0 || squads[squads.Count - 1].getCount() == max_squad_size) {
-                    if (total >= max_squads) {
-                        if (squads.Count == 0)
-                            clan_squads.Remove(tag);
-
-                        DebugWrite(player + " ignored, max squads count reached", 3);
-                        return false;
-                    }
-                    squads.Add(new PlayerSquad(neutralTeamId, getNextFreeClanSquadId(clan_squads)));
-                }
-
-                /* add player to the last squad in the clan */
-                if (movePlayer(player, neutralTeamId, squads[squads.Count - 1].getSquadId(), true))
-                    squads[squads.Count - 1].addPlayer(player);
-
-                return true;
-            });
-        }
-
-        private int getNextFreeClanSquadId(Dictionary<string, List<PlayerSquad>> clan_squads) {
-            int count = 1;
-            foreach (KeyValuePair<string, List<PlayerSquad>> pair in clan_squads)
-                foreach (PlayerSquad squad in pair.Value)
-                    count++;
-
-            return 16 + count;
-        }
-
-        private void getClanStats(List<PlayerProfile> members, Dictionary<string, int> stats) {
-            foreach (PlayerProfile player in members) {
-                if (!player.isInClan())
-                    continue;
-
-                string tag = player.getClanTag();
-
-                if (!stats.ContainsKey(tag))
-                    stats[tag] = 0;
-
-                stats[tag]++;
-            }
-        }
-
-        private void getClanStatsByTeam(List<PlayerProfile> members, Dictionary<string, int>[] stats) {
-            for (int i = 0; i < members.Count; i++) {
-                PlayerProfile player = members[i];
-                if (!player.isInClan())
-                    continue;
-
-                string tag = player.getClanTag();
-                int teamId = player.getTeamId();
-                int oppositeTeamId = getOpposingTeamId(teamId);
-
-                if (!stats[teamId].ContainsKey(tag))
-                    stats[teamId].Add(tag, 0);
-
-                if (!stats[oppositeTeamId].ContainsKey(tag))
-                    stats[oppositeTeamId].Add(tag, 0);
-
-
-                stats[teamId][tag]++;
-            }
-        }
-
-
-        private int getSmallTeamId(int team1Id, int team1Count, int team2Id, int team2Count) {
-            return (team1Count < team2Count) ? team1Id : team2Id;
-        }
-
-        private int getBigTeamId(int team1Id, int team1Count, int team2Id, int team2Count) {
-            return (team1Count > team2Count) ? team1Id : team2Id;
-        }
-
-        private int getOpposingTeamId(int teamId) {
-            return (teamId == 0) ? teamId : (teamId == 1) ? 2 : 1;
-        }
-
-
-        private int balanceTeams(DateTime now) {
+        private int balanceTeams(DateTime now)
+        {
 
 
             pluginState = PluginState.balance;
@@ -4237,7 +4850,8 @@ namespace PRoConEvents {
 
 
             DebugWrite("Total of ^b" + total + "^n player/s in server^0", 3);
-            for (int i = 1; i < 3; i++) {
+            for (int i = 1; i < 3; i++)
+            {
                 DebugWrite("^bTeam(" + TN(i) + ")^n has ^b" + player_count[i] + "^n player/s^0", 3);
             }
 
@@ -4246,19 +4860,22 @@ namespace PRoConEvents {
             int candidates = needed;
 
             //?????? jstmx - Wrong logic, some fixes
-            if (getBooleanVarValue("wait_death")) {
+            if (getBooleanVarValue("wait_death"))
+            {
                 candidates = getIntegerVarValue("wait_death_count");
 
                 int tsz = player_count[bigger_team];
 
                 // check that the candidate list does not exceed the team size
-                if (candidates > tsz) {
+                if (candidates > tsz)
+                {
                     DebugWrite("cannot use candidate list size of ^b" + candidates + "^n, Team(" + TN(bigger_team) + ") has only ^b" + tsz + "^n player" + ((tsz > 1) ? "s" : ""), 3);
                     candidates = tsz;
                 }
 
                 // check that the candidates list size is bigger than needed 
-                if (candidates > needed) {
+                if (candidates > needed)
+                {
                     needed = candidates;
                     DebugWrite("^bwait_death^n is on, will flag " + needed + " candidate" + ((needed > 1) ? "s" : "") + " for moving", 3);
                 }
@@ -4279,7 +4896,8 @@ namespace PRoConEvents {
             clan_stats[bigger_team] = new Dictionary<string, int>();
             clan_stats[neutral_team] = new Dictionary<string, int>();
 
-            if (keep_clans) {
+            if (keep_clans)
+            {
                 DebugWrite("Keeping clans in same team", 3);
 
                 List<PlayerProfile> players_list = getPlayersProfile("");
@@ -4294,7 +4912,8 @@ namespace PRoConEvents {
                 DebugWrite("^b" + clanlist.Count + "^n clans in server: [^b" + String.Join("^n], [^b", clanlist.ToArray()) + "^n]", 3);
             }
 
-            if (!getBooleanVarValue("keep_squads_live")) {
+            if (!getBooleanVarValue("keep_squads_live"))
+            {
                 DebugWrite("^bkeep_squads_live^n is off, moving players to no-squad pool before balancing", 3);
                 foreach (PlayerSquad squad in squad_pool)
                     foreach (PlayerProfile player in squad.getMembers())
@@ -4312,7 +4931,8 @@ namespace PRoConEvents {
 
 
             DebugWrite("Moving ^b" + needed + "^n players from sorted no-squad pool to ^bTeam(" + TN(smaller_team) + ")^n^0", 3);
-            while (needed > 0 && nosquad_pool.Count > 0) {
+            while (needed > 0 && nosquad_pool.Count > 0)
+            {
                 PlayerProfile player = nosquad_pool[0];
                 nosquad_pool.RemoveAt(0);
                 string tag = player.getClanTag();
@@ -4327,7 +4947,8 @@ namespace PRoConEvents {
             }
 
             /* if teams are balanced, we are done */
-            if (needed == 0) {
+            if (needed == 0)
+            {
                 DebugWrite("Teams should now be balanced!", 3);
                 return needed;
             }
@@ -4340,12 +4961,14 @@ namespace PRoConEvents {
             DebugWrite("Sorting the squad pool by ^b" + getStringVarValue("live_sort") + "^n^0", 3);
             squad_pool.Sort(new Comparison<PlayerSquad>(getSquadSort("live_sort")));
 
-            for (int i = 0; i < squad_pool.Count; i++) {
+            for (int i = 0; i < squad_pool.Count; i++)
+            {
                 DebugWrite("      " + i + ". " + squad_pool[i].ToString() + "(" + getSortFieldValueStr(squad_pool[i], "live_sort") + ")", 3);
             }
 
             DebugWrite("Moving squads from sorted squad pool to ^bTeam(" + TN(smaller_team) + ")^n^0", 3);
-            while (needed > 0 && squad_pool.Count > 0) {
+            while (needed > 0 && squad_pool.Count > 0)
+            {
                 PlayerSquad squad = squad_pool[0];
                 squad_pool.RemoveAt(0);
 
@@ -4357,7 +4980,8 @@ namespace PRoConEvents {
                 DebugWrite("^b" + needed + "^n players are needed on " + smaller_team_uid + "^0", 3);
                 DebugWrite(squad_uid + " has ^b" + squad_sz + "^n player/s^0", 2);
 
-                if (needed >= squad_sz) {
+                if (needed >= squad_sz)
+                {
                     if (keep_clans && shouldSkipClanSquad(squad, smaller_team, bigger_team, clan_stats))
                         continue;
 
@@ -4366,7 +4990,9 @@ namespace PRoConEvents {
                     DebugWrite("Moving entire " + squad_uid + " to " + smaller_team_uid + "^0", 3);
                     squad_sz = moveSquad(squad, smaller_team, team_sz);
                     needed -= squad_sz;
-                } else {
+                }
+                else
+                {
                     /* we have to break up a squad */
                     PlayerSquad temp_squad = new PlayerSquad(squad.getTeamId(), squad.getSquadId());
 
@@ -4377,7 +5003,8 @@ namespace PRoConEvents {
                         DebugWrite("      " + i + ". " + squad.getMembers()[i] + "(" + getSortFieldValueStr(squad.getMembers()[i], "live_sort") + ")", 3);
 
                     /* get as many players as needed */
-                    while (needed > 0 && squad.getCount() > 0) {
+                    while (needed > 0 && squad.getCount() > 0)
+                    {
                         PlayerProfile player = squad.getMembers()[0];
                         squad.dropPlayer(player);
 
@@ -4406,181 +5033,9 @@ namespace PRoConEvents {
             return needed;
         }
 
-        private bool shouldSkipClanSquad(PlayerSquad squad, int smaller_team, int bigger_team, Dictionary<string, int>[] clan_stats) {
-            int squad_sz = squad.getCount();
-            string tag = squad.getMajorityClanTag();
-
-            if (tag.Length > 0 && (clan_stats[bigger_team][tag] + clan_stats[smaller_team][tag]) > 1) {
-                if (clan_stats[bigger_team][tag] >= clan_stats[smaller_team][tag]) {
-                    DebugWrite("Skipping clan-squad " + squad.ToString() + " because majority of clan is in same team", 3);
-                    return true;
-                }
-
-                /* update clan stats */
-                clan_stats[bigger_team][tag] -= squad_sz;
-                clan_stats[smaller_team][tag] += squad_sz;
-            }
-
-            return false;
-        }
-
-        private bool shouldSkipClanPlayer(PlayerProfile player, int smaller_team, int bigger_team, Dictionary<string, int>[] clan_stats) {
-            string tag = player.getClanTag();
-
-            if (!clan_stats[bigger_team].ContainsKey(tag))
-                clan_stats[bigger_team].Add(tag, 0);
-
-            if (!clan_stats[smaller_team].ContainsKey(tag))
-                clan_stats[smaller_team].Add(tag, 0);
-
-            if (player.isInClan() && (clan_stats[bigger_team][tag] + clan_stats[smaller_team][tag]) > 1) {
-                /* if the majority of the players in the clan are in this team, skip this player */
-                if (clan_stats[bigger_team][tag] >= clan_stats[smaller_team][tag]) {
-                    DebugWrite("Skipping clan-player ^b" + player + "^n because majority of clan is in his team", 3);
-                    return true;
-                }
-
-                /* update the clan stats */
-                clan_stats[bigger_team][tag]--;
-                clan_stats[smaller_team][tag]++;
-            }
-            return false;
-        }
-
-        private string getSortFieldValueStr(PlayerProfile player, string phase) {
-            string sort_method = getStringVarValue(phase);
-
-            if (sort_method.CompareTo("kdr_asc_round") == 0 || sort_method.CompareTo("kdr_desc_round") == 0)
-                return "kdr_round: " + Math.Round(player.getRoundKdr(), 2);
-            else if (sort_method.CompareTo("score_asc_round") == 0 || sort_method.CompareTo("score_desc_round") == 0)
-                return "score_round: " + Math.Round(player.getRoundScore(), 2);
-            else if (sort_method.CompareTo("spm_asc_round") == 0 || sort_method.CompareTo("spm_desc_round") == 0)
-                return "spm_round: " + Math.Round(player.getRoundSpm(), 2);
-            else if (sort_method.CompareTo("kpm_asc_round") == 0 || sort_method.CompareTo("kpm_desc_round") == 0)
-                return "kpm_round: " + Math.Round(player.getRoundKpm(), 2);
-            else if (sort_method.CompareTo("time_asc_round") == 0 || sort_method.CompareTo("time_desc_round") == 0)
-                return "time_round: " + player.getRoundTime();
-            else if (sort_method.CompareTo("random_value") == 0 || sort_method.CompareTo("random_value") == 0)
-                return "random_value: " + player.getRandomValue();
-            else if (sort_method.CompareTo("kdr_asc_online") == 0 || sort_method.CompareTo("kdr_desc_online") == 0)
-                return "kdr_online: " + Math.Round(player.getOnlineKdr(), 2);
-            else if (sort_method.CompareTo("kpm_asc_online") == 0 || sort_method.CompareTo("kpm_desc_online") == 0)
-                return "kpm_online: " + Math.Round(player.getOnlineKpm(), 2);
-            else if (sort_method.CompareTo("spm_asc_online") == 0 || sort_method.CompareTo("spm_desc_online") == 0)
-                return "spm_online: " + Math.Round(player.getOnlineSpm(), 2);
-            else if (sort_method.CompareTo("kills_asc_online") == 0 || sort_method.CompareTo("kills_desc_online") == 0)
-                return "kills_online: " + player.getOnlineKills();
-            else if (sort_method.CompareTo("deaths_asc_online") == 0 || sort_method.CompareTo("deaths_desc_online") == 0)
-                return "deaths_online: " + player.getOnlineDeaths();
-            else if (sort_method.CompareTo("skill_asc_online") == 0 || sort_method.CompareTo("skill_desc_online") == 0)
-                return "skill_online: " + Math.Round(player.getOnlineSkill(), 2);
-            else if (sort_method.CompareTo("quits_asc_online") == 0 || sort_method.CompareTo("quits_desc_online") == 0)
-                return "quits_online: " + Math.Round(player.getOnlineQuits(), 2);
-            else if (sort_method.CompareTo("accuracy_asc_online") == 0 || sort_method.CompareTo("accuracy_desc_online") == 0)
-                return "accuracy_online: " + Math.Round(player.getOnlineAccuracy(), 2);
-            else if (sort_method.CompareTo("score_asc_online") == 0 || sort_method.CompareTo("score_desc_online") == 0)
-                return "score_online: " + player.getOnlineScore();
-            else if (sort_method.CompareTo("rank_asc_online") == 0 || sort_method.CompareTo("rank_desc_online") == 0)
-                return "rank_online: " + player.getOnlineRank();
-
-            DebugWrite("^1^bWARNING^0^n: cannot find player sort method for ^b" + sort_method + "^0", 1);
-            return "";
-        }
-
-        private string getSortFieldValueStr(PlayerSquad squad, string phase) {
-            string sort_method = getStringVarValue(phase);
-
-            if (sort_method.CompareTo("kdr_asc_round") == 0 || sort_method.CompareTo("kdr_desc_round") == 0)
-                return "kdr_round: " + Math.Round(squad.getRoundKdr(), 2);
-            else if (sort_method.CompareTo("score_asc_round") == 0 || sort_method.CompareTo("score_desc_round") == 0)
-                return "score_round: " + Math.Round(squad.getRoundScore(), 2);
-            else if (sort_method.CompareTo("spm_asc_round") == 0 || sort_method.CompareTo("spm_desc_round") == 0)
-                return "spm_round: " + Math.Round(squad.getRoundSpm(), 2);
-            else if (sort_method.CompareTo("kpm_asc_round") == 0 || sort_method.CompareTo("kpm_desc_round") == 0)
-                return "kpm_round: " + Math.Round(squad.getRoundKpm(), 2);
-            else if (sort_method.CompareTo("time_asc_round") == 0 || sort_method.CompareTo("time_desc_round") == 0)
-                return "time_round: " + squad.getRoundTime();
-            else if (sort_method.CompareTo("random_value") == 0 || sort_method.CompareTo("random_value") == 0)
-                return "random_value: " + squad.getRandomValue();
-            else if (sort_method.CompareTo("kdr_asc_online") == 0 || sort_method.CompareTo("kdr_desc_online") == 0)
-                return "kdr_online: " + Math.Round(squad.getOnlineKdr(), 2);
-            else if (sort_method.CompareTo("kpm_asc_online") == 0 || sort_method.CompareTo("kpm_desc_online") == 0)
-                return "kpm_online: " + Math.Round(squad.getOnlineKpm(), 2);
-            else if (sort_method.CompareTo("spm_asc_online") == 0 || sort_method.CompareTo("spm_desc_online") == 0)
-                return "spm_online: " + Math.Round(squad.getOnlineSpm(), 2);
-            else if (sort_method.CompareTo("kills_asc_online") == 0 || sort_method.CompareTo("kills_desc_online") == 0)
-                return "kills_online: " + Math.Round(squad.getOnlineKills(), 2);
-            else if (sort_method.CompareTo("deaths_asc_online") == 0 || sort_method.CompareTo("deaths_desc_online") == 0)
-                return "deaths_online: " + Math.Round(squad.getOnlineDeaths(), 2);
-            else if (sort_method.CompareTo("skill_asc_online") == 0 || sort_method.CompareTo("skill_desc_online") == 0)
-                return "skill_online: " + Math.Round(squad.getOnlineSkill(), 2);
-            else if (sort_method.CompareTo("quits_asc_online") == 0 || sort_method.CompareTo("quits_desc_online") == 0)
-                return "quits_online: " + Math.Round(squad.getOnlineQuits(), 2);
-            else if (sort_method.CompareTo("accuracy_asc_online") == 0 || sort_method.CompareTo("accuracy_desc_online") == 0)
-                return "accuracy_online: " + Math.Round(squad.getOnlineAccuracy(), 2);
-            else if (sort_method.CompareTo("score_asc_online") == 0 || sort_method.CompareTo("score_desc_online") == 0)
-                return "score_online: " + Math.Round(squad.getOnlineScore(), 2);
-            else if (sort_method.CompareTo("rank_asc_online") == 0 || sort_method.CompareTo("rank_desc_online") == 0)
-                return "rank_online: " + Math.Round(squad.getOnlineRank(), 2);
-
-            DebugWrite("^1^bWARNING^0^n: cannot find squad sort method for ^b" + sort_method + "^0", 1);
-            return "";
-        }
-
-        private bool isInMoveWhiteList(PlayerProfile player) {
-            bool result = isPlayerInWhiteList(player, "player_safe_wlist") || isPlayerInWhiteList(player, "clan_safe_wlist");
-
-            if (getBooleanVarValue("use_extra_white_lists"))
-                result |= isPlayerInWhiteList(player, "player_move_wlist") || isPlayerInWhiteList(player, "clan_move_wlist");
-
-            return result;
-        }
-
-        private bool isInKickWhiteList(PlayerProfile player) {
-            bool result = isPlayerInWhiteList(player, "player_safe_wlist") || isPlayerInWhiteList(player, "clan_safe_wlist");
-
-            if (getBooleanVarValue("use_extra_white_lists"))
-                result |= isPlayerInWhiteList(player, "player_kick_wlist") || isPlayerInWhiteList(player, "clan_kick_wlist");
-
-            return result;
-        }
-
-
-        private bool isPlayerInWhiteList(PlayerProfile player, String list_name) {
-            if (!getBooleanVarValue("use_white_list"))
-                return false;
-
-            if (!getPluginVars().Contains(list_name)) {
-                DebugWrite("^1^bWARNING: ^n^0 unknown white list ^b" + list_name + "^n", 1);
-                return false;
-            }
-
-            List<String> whitelist = getStringListVarValue(list_name);
-            if (whitelist.Count == 0)
-                return false;
-
-            String field = "";
-            if (Regex.Match(list_name, @"clan").Success)
-                field = player.getClanTag();
-            else if (Regex.Match(list_name, @"player").Success)
-                field = player.name;
-            else {
-                DebugWrite("^1^bWARNING:^0^n white list ^b" + list_name + "^n does not contain 'player' or 'clan' sub-string", 1);
-                return false;
-            }
-
-            if (Regex.Match(field, @"^\s*$").Success)
-                return false;
-
-            return whitelist.Contains(field);
-        }
-
-
-
-
-
-        /* best effort to move an entire squad into another team withouth breaking up */
-
+        /// <summary>
+        /// Attempts to move a squad to a specified team without breaking up the squad.
+        /// </summary>
         private int moveSquad(PlayerSquad squad, int teamId, int team_sz) {
             int players_moved = 0;
             if (squad == null)
@@ -4650,7 +5105,73 @@ namespace PRoConEvents {
             return players_moved;
 
         }
+        #endregion
 
+        #region Things that only manipulate the server model
+        /// <summary>
+        /// Attempts to put players with the same clan tag in the same squad.  Might change players team.  Any new clans
+        /// created are on no team.  All this happens virtually, without touching the BF server.
+        /// </summary>
+        /// <param name="members">All players on the server.</param>
+        /// <param name="clan_squads">A dictionary of what squads "belong" to what clans.</param>
+        /// <param name="clan_stats">A dictionary indicating how many players have each clan tag.</param>
+        private void getClanSquads(List<PlayerProfile> members, Dictionary<string, List<PlayerSquad>> clan_squads, Dictionary<string, int> clan_stats) {
+            int neutralTeamId = 0;
+            int noSquadId = 0;
+            int max_squad_size = 4;
+            int max_squads = 16;
+
+            //This is structured really oddly.  The most work happens as side effect to the predicate to the call to
+            //  RemoveAll.  The work is done by manipulating the collections passed in.
+
+            members.RemoveAll(delegate(PlayerProfile player) {
+                /* if player is not in a clan, ignore it*/
+                if (!player.isInClan())
+                    return false;
+
+
+
+                string tag = player.getClanTag();
+
+                /* if less than two players for the clan, ignore it */
+
+                if (clan_stats[tag] < 2)
+                    return false;
+
+                /* count total number of squads */
+                //int total = clan_squads.Values.Select(sl => sl.Count).Sum();
+                int total = 0;
+                foreach (KeyValuePair<string, List<PlayerSquad>> pair in clan_squads)
+                    total += pair.Value.Count;
+
+                if (!clan_squads.ContainsKey(tag))
+                    clan_squads[tag] = new List<PlayerSquad>();
+
+                List<PlayerSquad> squads = clan_squads[tag];
+
+                /* if there is no squads, of they are all full, add a new at the end */
+                if (squads.Count == 0 || squads[squads.Count - 1].getCount() == max_squad_size) {
+                    if (total >= max_squads) {
+                        if (squads.Count == 0)
+                            clan_squads.Remove(tag);
+
+                        DebugWrite(player + " ignored, max squads count reached", 3);
+                        return false;
+                    }
+                    squads.Add(new PlayerSquad(neutralTeamId, getNextFreeClanSquadId(clan_squads)));
+                }
+
+                /* add player to the last squad in the clan */
+                if (movePlayer(player, neutralTeamId, squads[squads.Count - 1].getSquadId(), true))
+                    squads[squads.Count - 1].addPlayer(player);
+
+                return true;
+            });
+        }
+
+        #endregion
+
+        #region Unreferenced garbage
         private List<PlayerProfile> removePlayers(List<PlayerProfile> player_list, int max_size) {
             if (players == null || players.Count == 0) {
                 DebugWrite("^1^bWARNING^0^n: cannot make a squad without any players", 1);
@@ -4665,6 +5186,140 @@ namespace PRoConEvents {
 
             return removed;
         }
+
+        public bool isServerEmpty()
+        {
+            return players.Count == 0;
+        }
+
+        public void forwardTicks(int count)
+        {
+            utc = utc.AddSeconds(count);
+        }
+
+        private void enforceImmediateMove(PlayerProfile vp)
+        {
+
+            int dtid = vp.getDelayedTeamId();
+            int dsid = vp.getDelayedSquadId();
+
+            vp.resetDelayedTeamSquad();
+
+            DebugWrite("Moving player " + vp + " from ^bTeam(" + TN(vp.getSavedTeamId()) + ").Squad(" + SQN(vp.getSavedSquadId()) + ")^n to ^bDTeam(" + TN(dtid) + ").DSquad(" + SQN(dsid) + ")^n", 3);
+            movePlayer(vp, dtid, dsid);
+
+        }
+
+        public void OnPlayerLeft(string strSoldierName)
+        {
+            PlayerProfile player = getPlayerProfile(strSoldierName);
+            if (player != null)
+                player.state = PlayerState.left;
+
+            if (this.players.ContainsKey(strSoldierName))
+                this.players.Remove(strSoldierName);
+
+        }
+
+        public void OnPlayerSuicide(string strSoldierName)
+        {
+            PlayerProfile player = getPlayerProfile(strSoldierName);
+            if (player != null)
+                player.state = PlayerState.dead;
+
+            player.updateLastDeath();
+
+            if (player.getDelayedTeamId() > 0)
+            {
+                DebugWrite("Player " + player + " has suicided, and he was flagged to be moved to ^bDTeam(" + TN(player.getDelayedTeamId()) + ").DSquad(" + SQN(player.getDelayedSquadId()) + ")^n", 3);
+                /* do not skip the balance check, this is delayed move, teams may already be balanced */
+                enforceDelayedMove(player);
+            }
+
+        }
+
+        public void OnPunkbusterplayerStatsCmd(CPunkbusterInfo cpbiPlayer) {
+        }
+
+        public void onPlayersStatsCmd(List<CPlayerInfo> lstPlayers, CPlayerSubset cpsSubset)
+        {
+
+            if (cpsSubset.Subset == CPlayerSubset.PlayerSubsetType.All)
+                foreach (CPlayerInfo cpiPlayer in lstPlayers)
+                    if (this.players.ContainsKey(cpiPlayer.SoldierName))
+                        this.players[cpiPlayer.SoldierName].updateInfo(cpiPlayer);
+
+            /* fail safe to get the maximum number of players in server */
+            if (lstPlayers.Count > max_player_count)
+                max_player_count = lstPlayers.Count;
+        }
+
+        private string state2strWHILE(PluginState state)
+        {
+            if (state.Equals(PluginState.balance))
+            {
+                return "balancing";
+            }
+            else if (state.Equals(PluginState.check))
+            {
+                return "checking";
+            }
+            else if (state.Equals(PluginState.warn))
+            {
+                return "warning";
+            }
+            else if (state.Equals(PluginState.stop))
+            {
+                return "stopped";
+            }
+            else if (state.Equals(PluginState.wait))
+            {
+                return "waiting";
+            }
+
+            return "unknown state";
+        }
+
+        bool boolAssertNE(string var, bool value, string cmp)
+        {
+            bool cmp_value = getBooleanVarValue(cmp);
+
+            if (!(value != cmp_value))
+            {
+                DebugWrite("^1^bERROR^0^n:  cannot set ^b" + var + "^n to ^b" + value.ToString() + "^n while ^b" + cmp + "^n is set to ^b" + cmp_value.ToString() + "^n^0", 1);
+                return false;
+            }
+            return true;
+        }
+
+        public void dump_data(string s)
+        {
+
+            try
+            {
+                // Create a temporary file
+                string path = Path.GetRandomFileName() + ".dump";
+
+                DebugWrite("^1Dumping information in file " + path, 1);
+                using (FileStream fs = File.Open(path, FileMode.OpenOrCreate))
+                {
+                    Byte[] info = new UTF8Encoding(true).GetBytes(s);
+                    fs.Write(info, 0, info.Length);
+                }
+
+            }
+            catch (Exception ex)
+            {
+                DebugWrite("^1^bWARNING^0^n: Unable to dump extra exception information.", 1);
+                DebugWrite("^1^bEXCEPTION^0^n:  " + ex.TargetSite + ": " + ex.Message, 1);
+
+            }
+        }
+        #endregion
+
+        #endregion
+
+
 
 
         public Dictionary<int, int> getPlayerCount() {
@@ -4682,8 +5337,6 @@ namespace PRoConEvents {
 
             return player_count;
         }
-
-
 
         private List<PlayerProfile> getNoSquadPlayers(int teamId) {
             Dictionary<int, PlayerSquad> squads = getSquads(teamId);
@@ -4757,14 +5410,14 @@ namespace PRoConEvents {
             return (remain_time % msg_interval_time) == 0 && (remain_time - msg_display_time) >= countdown_time;
         }
 
-        public bool isServerEmpty() {
-            return players.Count == 0;
-        }
 
-        public void forwardTicks(int count) {
-            utc = utc.AddSeconds(count);
-        }
+        private bool isInGameCommand(string str)
+        {
+            if (Regex.Match(str, @"^\s*[@/!]").Success)
+                return true;
 
+            return false;
+        }
 
         public void ConsoleWrite(string msg) {
             string prefix = "[^b" + GetPluginName() + "^n] ";
@@ -4774,19 +5427,6 @@ namespace PRoConEvents {
         public void DebugWrite(string msg, int level) {
             if (getIntegerVarValue("debug_level") >= level)
                 ConsoleWrite(msg);
-        }
-
-        public void OnPluginDisable() {
-
-            plugin_enabled = false;
-
-            unloadSettings();
-
-            DebugWrite("signaling stats fetching thread to stop", 1);
-            wake_handle.Set();
-            scratch_handle.Set();
-            DebugWrite("^b^1Disabled =(^0", 1);
-
         }
 
         public String getPluginVariableGroup(String name) {
@@ -4849,101 +5489,7 @@ namespace PRoConEvents {
 
         }
 
-        public List<CPluginVariable> GetDisplayPluginVariables() {
-            List<CPluginVariable> lstReturn = new List<CPluginVariable>();
-
-
-
-            //lstReturn.Add(new CPluginVariable("Settings|Refresh", typeof(string), "| edit this field to refresh settings |"));
-
-            List<string> vars = getPluginVars(true);
-
-
-
-
-
-            foreach (string var_name in vars) {
-                String group_name = getPluginVariableGroup(var_name);
-                String var_type = "string";
-                String var_value = getPluginVarValue(var_name);
-                int group_order = getGroupOrder(group_name);
-
-                if (shouldSkipGroup(group_name))
-                    continue;
-
-                if (shouldSkipVariable(var_name))
-                    continue;
-
-                if (var_name.Equals("live_sort") || var_name.Equals("round_sort"))
-                    var_type = "enum." + var_name + "(" + String.Join("|", getAllowedSorts().ToArray()) + ")";
-                else if (var_name.Equals("pass"))
-                    var_value = Regex.Replace(getPluginVarValue(var_name), @".", "*");
-
-                lstReturn.Add(new CPluginVariable(group_order + ". " + group_name + "|" + var_name, var_type, var_value));
-            }
-
-            return lstReturn;
-        }
-
         //Lists all of the plugin variables.
-        public List<CPluginVariable> GetPluginVariables() {
-            List<CPluginVariable> lstReturn = new List<CPluginVariable>();
-
-            List<string> vars = getPluginVars();
-            foreach (string var in vars)
-                lstReturn.Add(new CPluginVariable(var, typeof(string), getPluginVarValue(var)));
-
-            return lstReturn;
-        }
-
-
-        public void SetPluginVariable(string var, string val) {
-            //ConsoleWrite("setting " + var + " to " + val);
-            if (var.ToLower().Contains("refresh"))
-                return;
-
-
-
-
-
-            setPluginVarValue(var, val);
-
-
-        }
-
-
-        public override void OnPlayerJoin(string strSoldierName) {
-            battleLogConnect();
-        }
-
-        public override void OnPlayerKilled(Kill killInfo) {
-
-            if (killInfo == null)
-                return;
-
-            CPlayerInfo killer = killInfo.Killer;
-            CPlayerInfo victim = killInfo.Victim;
-
-            PlayerProfile vp = getPlayerProfile(victim.SoldierName);
-            PlayerProfile kp = getPlayerProfile(killer.SoldierName);
-
-            if (vp != null) {
-                vp.state = PlayerState.dead;
-                vp.updateInfo(victim);
-                vp.updateLastDeath();
-
-                if (vp.getDelayedTeamId() > 0) {
-                    DebugWrite("Player " + vp + " has died, he was flagged to be moved to ^bDTeam(" + TN(vp.getDelayedTeamId()) + ").DSquad(" + SQN(vp.getDelayedSquadId()) + ")^n", 3);
-                    /* do not skip the balance check, this is delayed move, teams may already be balanced */
-                    enforceDelayedMove(vp);
-                }
-            }
-
-            if (kp != null) {
-                kp.updateInfo(killer);
-                kp.updateLastKill();
-            }
-        }
 
         private void enforceDelayedMove(PlayerProfile vp) {
 
@@ -4983,19 +5529,10 @@ namespace PRoConEvents {
 
         }
 
-        private void enforceImmediateMove(PlayerProfile vp) {
 
-            int dtid = vp.getDelayedTeamId();
-            int dsid = vp.getDelayedSquadId();
-
-            vp.resetDelayedTeamSquad();
-
-            DebugWrite("Moving player " + vp + " from ^bTeam(" + TN(vp.getSavedTeamId()) + ").Squad(" + SQN(vp.getSavedSquadId()) + ")^n to ^bDTeam(" + TN(dtid) + ").DSquad(" + SQN(dsid) + ")^n", 3);
-            movePlayer(vp, dtid, dsid);
-
-        }
-
-
+        /// <summary>
+        /// Empty method body.
+        /// </summary>
         public void battleLogConnect() {
             /*
             if (!blog.isReady())
@@ -5009,131 +5546,6 @@ namespace PRoConEvents {
 
                 }
             }*/
-        }
-
-
-        public void OnPlayerLeft(string strSoldierName) {
-            PlayerProfile player = getPlayerProfile(strSoldierName);
-            if (player != null)
-                player.state = PlayerState.left;
-
-            if (this.players.ContainsKey(strSoldierName))
-                this.players.Remove(strSoldierName);
-
-        }
-
-        public void OnPlayerSuicide(string strSoldierName) {
-            PlayerProfile player = getPlayerProfile(strSoldierName);
-            if (player != null)
-                player.state = PlayerState.dead;
-
-            player.updateLastDeath();
-
-            if (player.getDelayedTeamId() > 0) {
-                DebugWrite("Player " + player + " has suicided, and he was flagged to be moved to ^bDTeam(" + TN(player.getDelayedTeamId()) + ").DSquad(" + SQN(player.getDelayedSquadId()) + ")^n", 3);
-                /* do not skip the balance check, this is delayed move, teams may already be balanced */
-                enforceDelayedMove(player);
-            }
-
-        }
-
-        public override void OnPlayerKickedByAdmin(string soldierName, string reason) {
-            PlayerProfile player = getPlayerProfile(soldierName);
-            if (player != null) {
-                player.state = PlayerState.kicked;
-                this.players.Remove(player.name);
-            }
-        }
-
-        // Added by jstmx 31.05.2012
-        public override void OnPlayerKilledByAdmin(string soldierName) {
-            PlayerProfile player = getPlayerProfile(soldierName);
-            if (player == null)
-                return;
-
-            player.state = PlayerState.dead;
-            player.updateLastDeath();
-
-            if (player.getDelayedTeamId() > 0) {
-                DebugWrite("Player " + player + " has been killed by admin, and he was flagged to be moved to ^bDTeam(" + TN(player.getDelayedTeamId()) + ").DSquad(" + SQN(player.getDelayedSquadId()) + ")^n", 3);
-                /* do not skip the balance check, this is delayed move, teams may already be balanced */
-                enforceDelayedMove(player);
-            }
-        }
-
-        public override void OnPlayerMovedByAdmin(string soldierName, int destinationTeamId, int destinationSquadId, bool forceKilled) {
-            PlayerProfile player = getPlayerProfile(soldierName);
-            if (player == null)
-                return;
-
-            player.setMovingByAdmin(true);
-            player.state = PlayerState.dead;
-            // jstmx: have to reset delayed and saved things
-            if (player.getDelayedTeamId() > 0) {
-                player.resetDelayedTeamSquad();
-                player.resetSavedTeamSquad();
-            }
-        }
-
-
-
-        public override void OnGlobalChat(string strSpeaker, string strMessage) {
-            if (isInGameCommand(strMessage))
-                inGameCommand(strSpeaker, strMessage);
-
-            PlayerProfile player = getPlayerProfile(strSpeaker);
-            if (player != null)
-                player.updateLastChat();
-        }
-
-
-        public override void OnTeamChat(string strSpeaker, string strMessage, int iTeamID) {
-            if (isInGameCommand(strMessage))
-                inGameCommand(strSpeaker, strMessage);
-
-            PlayerProfile player = getPlayerProfile(strSpeaker);
-            if (player != null)
-                player.updateLastChat();
-        }
-
-
-        public override void OnSquadChat(string strSpeaker, string strMessage, int iTeamID, int iSquadID) {
-            if (isInGameCommand(strMessage))
-                inGameCommand(strSpeaker, strMessage);
-
-            PlayerProfile player = getPlayerProfile(strSpeaker);
-            if (player != null)
-                player.updateLastChat();
-        }
-
-
-        private bool isInGameCommand(string str) {
-            if (Regex.Match(str, @"^\s*[@/!]").Success)
-                return true;
-
-            return false;
-        }
-
-        public override void OnLevelStarted() {
-            DebugWrite("Level starting!", 0);
-            level_started = true;               
-        }
-
-        public override void OnLevelLoaded(string mapFileName, string Gamemode, int roundsPlayed, int roundsTotal) {
-            max_round_tickets = 0;
-            DebugWrite("Detected GameMode : " + Gamemode, 1);
-            //Disabling balancer for SQDM modes
-            if (modes[Gamemode.ToLower()].Equals("sqdm")) {
-                DebugWrite("Disabling balancer for : " + Gamemode, 1);
-                startStopState("admin", utc);
-            } else {
-                DebugWrite("Check enabling balancer for : " + Gamemode, 1);
-                startWaitState(utc);
-            }
-        }
-
-
-        public void OnPunkbusterplayerStatsCmd(CPunkbusterInfo cpbiPlayer) {
         }
 
 
@@ -5154,199 +5566,6 @@ namespace PRoConEvents {
 
                 }
             }
-        }
-
-
-        Dictionary<String, PlayerProfile> new_players_batch = new Dictionary<string, PlayerProfile>();
-
-        Object mutex = new Object();
-        EventWaitHandle scratch_handle = new EventWaitHandle(false, EventResetMode.ManualReset);
-
-        public void stats_fetching_loop() {
-            DebugWrite("Starting stats fetching thread", 1);
-            getPlayerList();
-            while (true) {
-                if (new_player_queue.Count == 0) {
-                    // if there are no more players, put yourself to sleep
-                    DebugWrite("No new players, stats fetching thread going to sleep", 1);
-                    wake_handle.Reset();
-                    wake_handle.WaitOne();
-                    DebugWrite("Stats fetching thread is now awake!", 1);
-                }
-
-
-                InsaneBalancer plugin = this;
-
-                while (new_player_queue.Count > 0) {
-                    if (!plugin_enabled)
-                        break;
-
-                    List<String> keys = new List<string>(new_player_queue.Keys);
-
-                    String name = keys[keys.Count - 1];
-
-                    CPunkbusterInfo info = null;
-                    new_player_queue.TryGetValue(name, out info);
-
-                    if (info == null)
-                        continue;
-
-                    // make sure I am the only one modifying these dictionarie at this time
-                    lock (mutex) {
-                        if (new_player_queue.ContainsKey(name))
-                            new_player_queue.Remove(name);
-
-                        if (!new_players_batch.ContainsKey(name))
-                            new_players_batch.Add(name, null);
-                    }
-
-                    String msg = new_player_queue.Count + " more player" + ((new_player_queue.Count > 1) ? "s" : "") + " in queue";
-                    if (new_player_queue.Count == 0)
-                        msg = "no more players in queue";
-
-                    plugin.DebugWrite("Getting battlelog stats for ^b" + name + "^n, " + msg, 1);
-                    if (new_players_batch.ContainsKey(info.SoldierName))
-                        new_players_batch[name] = new PlayerProfile(plugin, info);
-                }
-
-                // abort the thread if the plugin was disabled
-                if (!plugin_enabled) {
-                    plugin.DebugWrite("detected that plugin was disabled, aborting stats fetching thread", 1);
-                    lock (mutex) {
-                        new_player_queue.Clear();
-                        new_players_batch.Clear();
-                        scratch_list.Clear();
-                    }
-                    return;
-                }
-
-                DebugWrite("Done fetching stats, " + new_players_batch.Count + " player" + ((new_players_batch.Count > 1) ? "s" : "") + " in new batch, waiting for players list now", 1);
-                scratch_handle.Reset();
-                getPlayerList();
-                scratch_handle.WaitOne();
-                scratch_handle.Reset();
-                lock (mutex) {
-                    // remove the nulls, and the ones that left
-                    List<String> players_to_remove = new List<string>();
-                    foreach (KeyValuePair<String, PlayerProfile> pair in new_players_batch)
-                        if (pair.Value == null || !scratch_list.Contains(pair.Key))
-                            if (!players_to_remove.Contains(pair.Key)) {
-                                DebugWrite("Looks like ^b" + pair.Key + "^n left, removing him from new batch", 3);
-                                players_to_remove.Add(pair.Key);
-                            }
-
-
-                    // now remove them
-                    foreach (String pname in players_to_remove)
-                        if (new_players_batch.ContainsKey(pname))
-                            new_players_batch.Remove(pname);
-
-                    if (new_players_batch.Count > 0)
-                        DebugWrite("Queue exhausted, will insert now a batch of " + new_players_batch.Count + " player" + ((new_players_batch.Count > 1) ? "s" : ""), 1);
-                    foreach (KeyValuePair<String, PlayerProfile> pair in new_players_batch)
-                        if (pair.Value != null && scratch_list.Contains(pair.Key))
-                            plugin.players.Add(pair.Key, pair.Value);
-
-                    new_players_batch.Clear();
-                }
-
-            }
-
-        }
-
-        Object info_mutex = new Object();
-        public override void OnServerInfo(CServerInfo csiServerInfo) {
-            int max_tickets;
-            lock (info_mutex) {
-                this.serverInfo = csiServerInfo;
-                string gamemode = serverInfo.GameMode.ToLower();
-
-                // first goes logic for conquests
-                if (!modes[gamemode].Equals("tdm") && !modes[gamemode].Equals("tdmcq"))
-                    max_tickets = this.serverInfo.TeamScores[0].Score;
-                else
-                    max_tickets = this.serverInfo.TeamScores[0].WinningScore;
-            }
-            if (max_tickets > max_round_tickets)
-                max_round_tickets = max_tickets;
-            DebugWrite("max round tickets : " + max_round_tickets, 1);
-        }
-
-
-        public override void OnPlayerTeamChange(string soldierName, int teamId, int squadId) {
-
-            int oldteamId, oldsquadId;
-            PlayerProfile player = getPlayerProfile(soldierName);
-            if (player == null)
-                return;
-
-            oldteamId = player.getTeamId();
-            oldsquadId = player.getSquadId();
-            player.state = PlayerState.dead;
-            //Need to save old teamId
-            player.saveTargetTeamSquad();
-
-            player.setTeamId(teamId);
-            player.setSquadId(squadId);
-            // jstmx: have to reset delayed and saved things
-            player.resetDelayedTeamSquad();
-            player.resetSavedTeamSquad();
-
-        }
-
-
-        public override void OnPlayerSquadChange(string strSoldierName, int iTeamID, int iSquadID) {
-            PlayerProfile player = getPlayerProfile(strSoldierName);
-            if (player == null)
-                return;
-
-            //Need to count players before set new Team for the current player!!
-            Dictionary<int, int> player_count = getPlayerCount();
-
-            int oldteamId, oldsquadId;
-
-            oldteamId = player.getTargetTeamId();
-            oldsquadId = player.getTargetSquadId();
-
-            player.setTeamId(iTeamID);
-            player.setSquadId(iSquadID);
-            // jstmx: have to reset delayed and saved things
-            player.resetDelayedTeamSquad();
-            player.resetSavedTeamSquad();
-            player.resetTargetTeamSquad();
-
-            if (round_balancer || oldteamId <= 0 || oldteamId == iTeamID || player.isMovingByAdmin()) {
-                player.setMovingByAdmin(false);
-                return;
-            }
-
-            //Finding loosing team
-            int loosingTeamId = getLoosingTeamId();
-
-            // We have to check if one is allowed to change loosing team after ticket threshold
-            if (player.getTeamId() > 0 && oldteamId != iTeamID && checkTicketThreshold() && getBooleanVarValue("disable_team_change") && loosingTeamId == oldteamId) {
-                SendPlayerMessage(player.name, "Warning! You are not allowed to change loosing team after ticket threshold : " + getIntegerVarValue("ticket_threshold").ToString());
-                DebugWrite("Player " + player.name + " tryes to change loosing team after ticked threshold reached!", 1);
-                bool original_value = this.virtual_mode;
-                this.virtual_mode = false;
-                player.setMovingByAdmin(true);
-                movePlayer(player, oldteamId, oldsquadId, false, false);
-                player.setMovingByAdmin(false);
-                this.virtual_mode = original_value;
-            }
-
-        }
-
-        public void onPlayersStatsCmd(List<CPlayerInfo> lstPlayers, CPlayerSubset cpsSubset) {
-
-            if (cpsSubset.Subset == CPlayerSubset.PlayerSubsetType.All)
-                foreach (CPlayerInfo cpiPlayer in lstPlayers)
-                    if (this.players.ContainsKey(cpiPlayer.SoldierName))
-                        this.players[cpiPlayer.SoldierName].updateInfo(cpiPlayer);
-
-            /* fail safe to get the maximum number of players in server */
-            if (lstPlayers.Count > max_player_count)
-                max_player_count = lstPlayers.Count;
         }
 
 
@@ -5502,66 +5721,6 @@ namespace PRoConEvents {
             return utc.Subtract(startRoundTime).TotalMinutes;
         }
 
-
-        public void delayedRoundBalance() {
-
-            bool original_state = getBooleanVarValue("balance_live");
-
-            if (original_state) {
-                DebugWrite("Temporarily disabling live balancer, for round-over", 1);
-                setBooleanVarValue("balance_live", false);
-            }
-
-            try {
-                wait_state = true;
-                Thread.Sleep(getIntegerVarValue("round_wait_time") * 1000);
-                wait_state = false;
-
-                DebugWrite("round-over, ^b" + getIntegerVarValue("round_wait_time") + "^n seconds wait time expired", 1);
-                if (round_balancer)
-                    balanceRound(win_teamId);
-                restartWaitState(utc);
-                resetPlayerStats();
-                round_balancer = false;
-
-            } catch (Exception e) {
-                dump_exception(e);
-            }
-
-
-            if (original_state) {
-                DebugWrite("Re-enabling live balancing", 1);
-                setBooleanVarValue("balance_live", true);
-            }
-        }
-
-        public override void OnRoundOver(int iWinningTeamID) {
-            round_balancer = checkRoundBalance();
-            win_teamId = iWinningTeamID;
-            lose_teamId = getOpposingTeamId(win_teamId);
-            level_started = false;
-
-            if (!getBooleanVarValue("balance_round")) {
-                DebugWrite("round-over, but ^bbalance_round^n is not enabled", 1);
-                round_balancer = false;
-                return;
-            }
-
-
-            DebugWrite("round-over, waiting for ^b" + getIntegerVarValue("round_wait_time") + "^n seconds", 1);
-            Thread sleeper = new Thread(new ThreadStart(delayedRoundBalance));
-            sleeper.Start();
-
-        }
-
-        public override void OnPlayerSpawned(string soldierName, Inventory spawnedInventory) {
-            PlayerProfile player = getPlayerProfile(soldierName);
-            if (player != null) {
-                player.updateLastSpawn();
-                player.state = PlayerState.alive;
-            }
-        }
-
         private void resetPlayerStats() {
 
             List<PlayerProfile> players_list = getPlayersProfile("");
@@ -5623,22 +5782,6 @@ namespace PRoConEvents {
                 }
             }
 
-        }
-
-        private string state2strWHILE(PluginState state) {
-            if (state.Equals(PluginState.balance)) {
-                return "balancing";
-            } else if (state.Equals(PluginState.check)) {
-                return "checking";
-            } else if (state.Equals(PluginState.warn)) {
-                return "warning";
-            } else if (state.Equals(PluginState.stop)) {
-                return "stopped";
-            } else if (state.Equals(PluginState.wait)) {
-                return "waiting";
-            }
-
-            return "unknown state";
         }
 
         private void initializeBalancer() {
@@ -6070,15 +6213,6 @@ namespace PRoConEvents {
             return true;
         }
 
-        bool boolAssertNE(string var, bool value, string cmp) {
-            bool cmp_value = getBooleanVarValue(cmp);
-
-            if (!(value != cmp_value)) {
-                DebugWrite("^1^bERROR^0^n:  cannot set ^b" + var + "^n to ^b" + value.ToString() + "^n while ^b" + cmp + "^n is set to ^b" + cmp_value.ToString() + "^n^0", 1);
-                return false;
-            }
-            return true;
-        }
 
         /// <summary>
         /// Ridiculously complicated way to validate that particular variables are valid.
@@ -6577,14 +6711,6 @@ namespace PRoConEvents {
             return pp;
         }
 
-        public override void OnPunkbusterPlayerInfo(CPunkbusterInfo cpbiPlayer) {
-
-            if (cpbiPlayer == null)
-                return;
-
-            processNewPlayer(cpbiPlayer);
-        }
-
         public void dump_exception(Exception e) {
             if (e.GetType().Equals(typeof(ThreadAbortException))) {
                 Thread.ResetAbort();
@@ -6619,25 +6745,6 @@ namespace PRoConEvents {
                     fs.Write(info, 0, info.Length);
                 }
 
-
-            } catch (Exception ex) {
-                DebugWrite("^1^bWARNING^0^n: Unable to dump extra exception information.", 1);
-                DebugWrite("^1^bEXCEPTION^0^n:  " + ex.TargetSite + ": " + ex.Message, 1);
-
-            }
-        }
-
-        public void dump_data(string s) {
-
-            try {
-                // Create a temporary file
-                string path = Path.GetRandomFileName() + ".dump";
-
-                DebugWrite("^1Dumping information in file " + path, 1);
-                using (FileStream fs = File.Open(path, FileMode.OpenOrCreate)) {
-                    Byte[] info = new UTF8Encoding(true).GetBytes(s);
-                    fs.Write(info, 0, info.Length);
-                }
 
             } catch (Exception ex) {
                 DebugWrite("^1^bWARNING^0^n: Unable to dump extra exception information.", 1);
@@ -6713,22 +6820,5 @@ namespace PRoConEvents {
                         players.Remove(pname);
             }
         }
-
-        public override void OnListPlayers(List<CPlayerInfo> lstPlayers, CPlayerSubset cpsSubset) {
-            if (cpsSubset.Subset != CPlayerSubset.PlayerSubsetType.All)
-                return;
-
-            updateQueues(lstPlayers);
-            syncPlayersList(lstPlayers);
-
-            /* fail safe to get the maximum number of players in server */
-            if (lstPlayers.Count > max_player_count)
-                max_player_count = lstPlayers.Count;
-
-
-            if (check_state_phase == 1)
-                startCheckState(utc);
-        }
-
     }
 }
