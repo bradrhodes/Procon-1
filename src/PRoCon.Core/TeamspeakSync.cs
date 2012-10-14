@@ -2003,16 +2003,25 @@ namespace PRoConEvents
                             playerSwappedTeamsOrSquads((String)mCurrentAction.Argument, (Int32)mCurrentAction.Argument, (Int32)mCurrentAction.Argument);
                             break;
                         case Commands.SetSyncToStaging:
-                            debugWrite(dbgEvents, "[Event] Processing Sync to Staging event for Player.");
-                            SetSyncToStagingFlagForPlayer((string) mCurrentAction.Argument);
+                            if(mEnableTSStaging)
+                            {
+                                debugWrite(dbgEvents, "[Event] Processing Sync to Staging event for Player.");
+                                SetSyncToStagingFlagForPlayer((string)mCurrentAction.Argument);
+                            }
                             break;
                         case Commands.SetSyncToTeam:
-                            debugWrite(dbgEvents, "[Event] Processing Set Sync to Team event for Player.");
-                            SetSyncToTeamFlagForPlayer((string) mCurrentAction.Argument);
+                            if(mEnableTSTeam)
+                            {
+                                debugWrite(dbgEvents, "[Event] Processing Set Sync to Team event for Player.");
+                                SetSyncToTeamFlagForPlayer((string)mCurrentAction.Argument);
+                            }
                             break;
                         case Commands.SetNoSync:
-                            debugWrite(dbgEvents, "[Event] Processing Set No Sync event for Player.");
-                            SetNoSyncFlagForPlayer((string) mCurrentAction.Argument);
+                            if(mEnableTSNoSync)
+                            {
+                                debugWrite(dbgEvents, "[Event] Processing Set No Sync event for Player.");
+                                SetNoSyncFlagForPlayer((string)mCurrentAction.Argument);
+                            }
                             break; 
                         case Commands.ResetUserSyncFlags:
                             debugWrite(dbgEvents, "[Event] Processing Sync Flag Reset for Player.");
@@ -2023,8 +2032,12 @@ namespace PRoConEvents
                             ResetAllUserSyncFlags();
                             break;
                         case Commands.DisplayTSSquadList:
-                            debugWrite(dbgEvents, "[Event] Processing DisplayTSSquadList event.");
-                            DisplayTsSquadList((string) mCurrentAction.Argument);
+                            if(mEnableTSSquadList)
+                            {
+                                debugWrite(dbgEvents, "[Event] Processing DisplayTSSquadList event.");
+                                DisplayTsSquadList((string)mCurrentAction.Argument);
+                            }
+                            
                             break;
                     }
                 } catch (Exception e) {
@@ -3317,7 +3330,7 @@ namespace PRoConEvents
                 user.IsSyncToTeam = false;
                 user.IsSyncToStaging = false;
                 user.IsNoSync = false;
-                debugWrite(dbgClients, "[Clients] - Flags state of client {0}: {1}, {2}, {3}", user.GmClient.Name, user.IsNoSync, user.IsSyncToStaging, user.IsSyncToTeam);
+                
             }
         }
         /// <summary>Sets the NoSync flag for a player on the server.  This player will be ignored by Teamsync until the next round or until the flag is reset. </summary>
@@ -3330,7 +3343,7 @@ namespace PRoConEvents
                     user.IsNoSync = true;
                     user.IsSyncToStaging = false;
                     user.IsSyncToTeam = false;
-                    debugWrite(dbgClients, "[Clients] - Flags state of client {0}: {1}, {2}, {3}", user.GmClient.Name, user.IsNoSync, user.IsSyncToStaging, user.IsSyncToTeam);
+                    
                     break;
                 }
             }
@@ -3346,7 +3359,7 @@ namespace PRoConEvents
                     user.IsSyncToTeam = true;
                     user.IsSyncToStaging = false;
                     addToActionQueue(Commands.CheckClientForSwapping, user);
-                    debugWrite(dbgClients, "[Clients] - Flags state of client {0}: {1}, {2}, {3}", user.GmClient.Name, user.IsNoSync, user.IsSyncToStaging, user.IsSyncToTeam);
+                    
                     break;
                 }
             }
@@ -3363,7 +3376,7 @@ namespace PRoConEvents
                     user.IsSyncToTeam = false;
                     user.IsSyncToStaging = true;
                     addToActionQueue(Commands.CheckClientForSwapping, user);
-                    debugWrite(dbgClients, "[Clients] - Flags state of client {0}: {1}, {2}, {3}", user.GmClient.Name, user.IsNoSync, user.IsSyncToStaging, user.IsSyncToTeam);
+                    
                     break;
                 }
             }
@@ -3381,7 +3394,6 @@ namespace PRoConEvents
                     user.IsSyncToStaging = false;
 
                     addToActionQueue(Commands.CheckClientForSwapping, user);
-                    debugWrite(dbgClients, "[Clients] - Flags state of client {0}: {1}, {2}, {3}", user.GmClient.Name, user.IsNoSync, user.IsSyncToStaging, user.IsSyncToTeam);
                     break;
                 }
             }
