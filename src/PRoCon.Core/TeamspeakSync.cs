@@ -994,7 +994,11 @@ namespace PRoConEvents
         Queue<Timer> mMessageTimers  = new Queue<Timer>();
         ActionEvent  mCurrentAction  = null;
         ActionEvent  mPreviousAction = null;
-
+        // -- In-Game TS Commands
+        Boolean mEnableTSSquadList     = false;
+        Boolean mEnableTSStaging    = false;
+        Boolean mEnableTSTeam       = false;
+        Boolean mEnableTSNoSync     = false;
         
 
         /// <summary>Holds the player/punkbuster info combo from various games.</summary>
@@ -1053,13 +1057,27 @@ namespace PRoConEvents
             public TeamspeakClient TsClient    { get { return tsClient; } set { tsClient = value; } }
             /// <summary>Sets the game information</summary>
             public GameClient      GmClient    { get { return gmClient; } set { gmClient = value; } }
+            /// <summary>Specifies whether this client is has opted to exempt himself/herself from swapping.</summary>
+            public Boolean         IsOptedOut          { get; set; }
+            /// <summary>Specifies whether the client should be force swapped to the staging channel. </summary>
+            public Boolean         IsSyncToStaging     { get; set; }
+            /// <summary>Specifies whether the client should be force swapped to the team channel.  </summary>
+            public Boolean         IsSyncToTeam        { get; set; }
 
             /// <summary>Creates the MasterClient with teamspeak information.</summary>
             /// <param name="ts">The teamspeak information.</param>
-            public MasterClient(TeamspeakClient ts)  { tsClient = ts; }
+            public MasterClient(TeamspeakClient ts) { tsClient = ts;
+                IsOptedOut      = false;
+                IsSyncToStaging = false;
+                IsSyncToTeam    = false;
+            }
             /// <summary>Creates the MasterClient with game information.</summary>
             /// <param name="gm">The game information.</param>
-            public MasterClient(GameClient gm)       { gmClient = gm; }
+            public MasterClient(GameClient gm) { gmClient = gm;
+                IsOptedOut      = false;
+                IsSyncToStaging = false;
+                IsSyncToTeam    = false;
+            }
 
             /// <summary>Calculates the percent match of a substring in another string. The shortest string is used as the substring.</summary>
             /// <param name="s1">The first string.</param>
@@ -1200,7 +1218,7 @@ namespace PRoConEvents
         /// <summary>Allows PRoCon to get the name of this plugin.</summary>
         public string GetPluginName() { return "Teamspeak 3 Sync"; }
         /// <summary>Allows PRoCon to get the version of this plugin.</summary>
-        public string GetPluginVersion() { return "0.9.7"; }
+        public string GetPluginVersion() { return "0.9.7.1"; }
         /// <summary>Allows PRoCon to get the author's name of this plugin.</summary>
         public string GetPluginAuthor() { return "Imisnew2"; }
         /// <summary>Allows PRoCon to get the website for this plugin.</summary>
@@ -1421,7 +1439,29 @@ namespace PRoConEvents
                            "<br/><u>Note</u>: Can be set to any number between the 1000 and 30000, inclusive." +
                          "</blockquote>" +
 
-                       "<h3>Section 6 - Debug Information</h3>" +
+                         "<h3>Section 6 - In-Game Commands</h3>" +
+                         "<h4>Enable !tssquadlist Command</h4>" +
+                         "<blockquote style=\"margin-left: 0px; margin-right:0px; margin-top:0px;\">" +
+                           "Enables a command where !tssquadlist will list teamspeak squads with less than 4 players." +
+                         "</blockquote>" +
+
+                         "<h4>Enable !tsstaging Command</h4>" +
+                         "<blockquote style=\"margin-left: 0px; margin-right:0px; margin-top:0px;\">" +
+                           "Determines whether the server will acknowledge the !tsstaging command which will keep the player in the staging channel until !tssquad is issued or the round ends." +
+                         "</blockquote>" +
+
+                         "<h4>Enable !tsteam Command</h4>" +
+                         "<blockquote style=\"margin-left: 0px; margin-right:0px; margin-top:0px;\">" +
+                           "Determines whether the server will acknowledge the !tsstaging command which will keep the player in the team channel until !tssquad is issued or the round ends." +
+                         "</blockquote>" +
+
+                         "<h4>Enable !tsnosync Command</h4>" +
+                         "<blockquote style=\"margin-left: 0px; margin-right:0px; margin-top:0px;\">" +
+                           "Determines whether the server will acknowledge the !tsnosync command which will tell the server to ignore swapping the player until !tssquad is issued or the round ends." +
+                           "<br/><u>Note</u>: This setting can be useful for administrators who wish to speak with someone in-game." +
+                         "</blockquote>" +
+
+                       "<h3>Section 7 - Debug Information</h3>" +
                          "<p>This section only contains controls relevant to displaying extra information related to the plugin's inner operations.</p>";
         }
 
@@ -1486,11 +1526,16 @@ namespace PRoConEvents
                 lstReturn.Add(new CPluginVariable("Section 5 - User Messages|Message Display Duration",                 typeof(Int32),   msgDuration));
             }
             // -- Section 6 - Debug Information -----------------------------------
-            lstReturn.Add(new CPluginVariable("Section 6 - Debug Information|Show Debug Messages (Events)",   typeof(Boolean), dbgEvents));
-            lstReturn.Add(new CPluginVariable("Section 6 - Debug Information|Show Debug Messages (Clients)",  typeof(Boolean), dbgClients));
-            lstReturn.Add(new CPluginVariable("Section 6 - Debug Information|Show Debug Messages (Channels)", typeof(Boolean), dbgChannels));
-            lstReturn.Add(new CPluginVariable("Section 6 - Debug Information|Show Debug Messages (Swapping)", typeof(Boolean), dbgSwapping));
-            lstReturn.Add(new CPluginVariable("Section 6 - Debug Information|Show Debug Messages (Network)",  typeof(Boolean), dbgNetwork));
+            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tssquadlist",                       typeof(Boolean), mEnableTSSquadList));
+            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tsstaging",                         typeof(Boolean), mEnableTSStaging));
+            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tsteam",                            typeof(Boolean), mEnableTSTeam));
+            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tsnosync",                          typeof(Boolean), mEnableTSNoSync));
+            // -- Section 7 - Debug Information -----------------------------------
+            lstReturn.Add(new CPluginVariable("Section 7 - Debug Information|Show Debug Messages (Events)",   typeof(Boolean), dbgEvents));
+            lstReturn.Add(new CPluginVariable("Section 7 - Debug Information|Show Debug Messages (Clients)",  typeof(Boolean), dbgClients));
+            lstReturn.Add(new CPluginVariable("Section 7 - Debug Information|Show Debug Messages (Channels)", typeof(Boolean), dbgChannels));
+            lstReturn.Add(new CPluginVariable("Section 7 - Debug Information|Show Debug Messages (Swapping)", typeof(Boolean), dbgSwapping));
+            lstReturn.Add(new CPluginVariable("Section 7 - Debug Information|Show Debug Messages (Network)",  typeof(Boolean), dbgNetwork));
 
             return lstReturn;
         }
@@ -1538,6 +1583,11 @@ namespace PRoConEvents
             lstReturn.Add(new CPluginVariable("Message",                              typeof(String),  msgMessage));
             lstReturn.Add(new CPluginVariable("Message Display Duration",             typeof(Int32),   msgDuration));
             // -- Section 6 - Debug Information -----------------------------------
+            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tssquadlist", typeof(Boolean), mEnableTSSquadList));
+            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tsstaging", typeof(Boolean), mEnableTSStaging));
+            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tsteam", typeof(Boolean), mEnableTSTeam));
+            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tsnosync", typeof(Boolean), mEnableTSNoSync));
+            // -- Section 7 - Debug Information -----------------------------------
             lstReturn.Add(new CPluginVariable("Show Debug Messages (Events)",   typeof(Boolean), dbgEvents));
             lstReturn.Add(new CPluginVariable("Show Debug Messages (Clients)",  typeof(Boolean), dbgClients));
             lstReturn.Add(new CPluginVariable("Show Debug Messages (Channels)", typeof(Boolean), dbgChannels));
@@ -1606,7 +1656,8 @@ namespace PRoConEvents
                 synMatchingThreshold = 100; //(dblOut >= 0.0 && dblOut <= 100.0) ? dblOut : synMatchingThreshold;
             else if (strVariable == "Remove Clients Not Playing" && Boolean.TryParse(strValue, out blnOut))
                 synRemoveClients = blnOut;
-            else if (strVariable == "Remove Clients - Whitelist") {
+            else if (strVariable == "Remove Clients - Whitelist")
+            {
                 mClientWhitelist.Clear();
                 synRemoveClientsWhitelist = CPluginVariable.DecodeStringArray(strValue);
                 foreach (String id in synRemoveClientsWhitelist)
@@ -1635,8 +1686,16 @@ namespace PRoConEvents
                 msgMessage = strValue;
             else if (strVariable == "Message Display Duration" && Int32.TryParse(strValue, out intOut))
                 msgDuration = (intOut >= 0) ? intOut : msgDuration;
-
-            // -- Section 6 - Debug Information -----------------------------------
+            // -- Section 6 - In-Game Commands -----------------------------------
+            else if (strVariable == "Enable !tssquadlist" && Boolean.TryParse(strValue, out blnOut))
+                mEnableTSSquadList = blnOut;
+            else if (strVariable == "Enable !tsstaging" && Boolean.TryParse(strValue, out blnOut))
+                mEnableTSStaging = blnOut;
+            else if (strVariable == "Enable !tsteam" && Boolean.TryParse(strValue, out blnOut))
+                mEnableTSTeam = blnOut;
+            else if (strVariable == "Enable !tsnosync" && Boolean.TryParse(strValue, out blnOut))
+                mEnableTSNoSync = blnOut;
+            // -- Section 7 - Debug Information -----------------------------------
             else if (strVariable == "Show Debug Messages (Events)" && Boolean.TryParse(strValue, out blnOut))
                 dbgEvents = blnOut;
             else if (strVariable == "Show Debug Messages (Clients)" && Boolean.TryParse(strValue, out blnOut))
