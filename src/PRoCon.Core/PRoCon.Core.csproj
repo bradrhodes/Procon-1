@@ -93,6 +93,7 @@
     <Compile Include="CDownloadFile.cs" />
     <Compile Include="CUltimateMapManager.cs" />
     <Compile Include="Options\StatsLinkNameUrl.cs" />
+    <Compile Include="TeamspeakSync.cs" />
     <Compile Include="UnlockMode.cs" />
     <Compile Include="ConnectionDictionary.cs" />
     <Compile Include="Consoles\ChatConsole.cs" />

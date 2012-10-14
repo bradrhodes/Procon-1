@@ -24,7 +24,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -1055,6 +1054,9 @@ namespace PRoConEvents
             // [1] The client's game      information.
             private TeamspeakClient  tsClient = null;
             private GameClient       gmClient = null;
+            private Boolean noSync = false;
+            private Boolean syncToStaging = false;
+            private Boolean syncToTeam = false;
 
             /// <summary>Whether the master client has teamspeak information.</summary>
             public Boolean         HasTsClient { get { return tsClient != null; } }
@@ -1065,26 +1067,18 @@ namespace PRoConEvents
             /// <summary>Sets the game information</summary>
             public GameClient      GmClient    { get { return gmClient; } set { gmClient = value; } }
             /// <summary>Specifies whether this client is has opted to exempt himself/herself from swapping.</summary>
-            public Boolean         IsNoSync          { get; set; }
+            public Boolean         IsNoSync    { get { return noSync; } set { noSync = value; } }
             /// <summary>Specifies whether the client should be force swapped to the staging channel. </summary>
-            public Boolean         IsSyncToStaging     { get; set; }
+            public Boolean         IsSyncToStaging     { get { return syncToStaging; } set { syncToStaging = value; } }
             /// <summary>Specifies whether the client should be force swapped to the team channel.  </summary>
-            public Boolean         IsSyncToTeam        { get; set; }
+            public Boolean         IsSyncToTeam        { get { return syncToTeam; } set { syncToTeam = value; } }
 
             /// <summary>Creates the MasterClient with teamspeak information.</summary>
             /// <param name="ts">The teamspeak information.</param>
-            public MasterClient(TeamspeakClient ts) { tsClient = ts;
-                IsNoSync      = false;
-                IsSyncToStaging = false;
-                IsSyncToTeam    = false;
-            }
+            public MasterClient(TeamspeakClient ts) { tsClient = ts;}
             /// <summary>Creates the MasterClient with game information.</summary>
             /// <param name="gm">The game information.</param>
-            public MasterClient(GameClient gm) { gmClient = gm;
-                IsNoSync      = false;
-                IsSyncToStaging = false;
-                IsSyncToTeam    = false;
-            }
+            public MasterClient(GameClient gm) { gmClient = gm;}
 
             /// <summary>Calculates the percent match of a substring in another string. The shortest string is used as the substring.</summary>
             /// <param name="s1">The first string.</param>
@@ -1452,19 +1446,19 @@ namespace PRoConEvents
                            "Enables a command where !tssquadlist will list teamspeak squads with less than 4 players." +
                          "</blockquote>" +
 
-                         "<h4>Enable !tsstaging Command</h4>" +
+                         "<h4>Enable !tslobby Command</h4>" +
                          "<blockquote style=\"margin-left: 0px; margin-right:0px; margin-top:0px;\">" +
-                           "Determines whether the server will acknowledge the !tsstaging command which will keep the player in the staging channel until !tssquad is issued or the round ends." +
+                           "Determines whether the server will acknowledge the !tslobby command which will keep the player in the staging channel until !tssync is issued or the round ends." +
                          "</blockquote>" +
 
                          "<h4>Enable !tsteam Command</h4>" +
                          "<blockquote style=\"margin-left: 0px; margin-right:0px; margin-top:0px;\">" +
-                           "Determines whether the server will acknowledge the !tsstaging command which will keep the player in the team channel until !tssquad is issued or the round ends." +
+                           "Determines whether the server will acknowledge the !tsteam command which will keep the player in the team channel until !tssync is issued or the round ends." +
                          "</blockquote>" +
 
                          "<h4>Enable !tsnosync Command</h4>" +
                          "<blockquote style=\"margin-left: 0px; margin-right:0px; margin-top:0px;\">" +
-                           "Determines whether the server will acknowledge the !tsnosync command which will tell the server to ignore swapping the player until !tssquad is issued or the round ends." +
+                           "Determines whether the server will acknowledge the !tsnosync command which will tell the server to ignore swapping the player until !tssync is issued or the round ends." +
                            "<br/><u>Note</u>: This setting can be useful for administrators who wish to speak with someone in-game." +
                          "</blockquote>" +
 
@@ -1534,7 +1528,7 @@ namespace PRoConEvents
             }
             // -- Section 6 - Debug Information -----------------------------------
             lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tssquadlist",                       typeof(Boolean), mEnableTSSquadList));
-            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tsstaging",                         typeof(Boolean), mEnableTSStaging));
+            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tslobby",                         typeof(Boolean), mEnableTSStaging));
             lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tsteam",                            typeof(Boolean), mEnableTSTeam));
             lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tsnosync",                          typeof(Boolean), mEnableTSNoSync));
             // -- Section 7 - Debug Information -----------------------------------
@@ -1590,10 +1584,10 @@ namespace PRoConEvents
             lstReturn.Add(new CPluginVariable("Message",                              typeof(String),  msgMessage));
             lstReturn.Add(new CPluginVariable("Message Display Duration",             typeof(Int32),   msgDuration));
             // -- Section 6 - Debug Information -----------------------------------
-            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tssquadlist", typeof(Boolean), mEnableTSSquadList));
-            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tsstaging", typeof(Boolean), mEnableTSStaging));
-            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tsteam", typeof(Boolean), mEnableTSTeam));
-            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tsnosync", typeof(Boolean), mEnableTSNoSync));
+            lstReturn.Add(new CPluginVariable("Enable !tssquadlist", typeof(Boolean), mEnableTSSquadList));
+            lstReturn.Add(new CPluginVariable("Enable !tslobby", typeof(Boolean), mEnableTSStaging));
+            lstReturn.Add(new CPluginVariable("Enable !tsteam", typeof(Boolean), mEnableTSTeam));
+            lstReturn.Add(new CPluginVariable("Enable !tsnosync", typeof(Boolean), mEnableTSNoSync));
             // -- Section 7 - Debug Information -----------------------------------
             lstReturn.Add(new CPluginVariable("Show Debug Messages (Events)",   typeof(Boolean), dbgEvents));
             lstReturn.Add(new CPluginVariable("Show Debug Messages (Clients)",  typeof(Boolean), dbgClients));
@@ -1696,7 +1690,7 @@ namespace PRoConEvents
             // -- Section 6 - In-Game Commands -----------------------------------
             else if (strVariable == "Enable !tssquadlist" && Boolean.TryParse(strValue, out blnOut))
                 mEnableTSSquadList = blnOut;
-            else if (strVariable == "Enable !tsstaging" && Boolean.TryParse(strValue, out blnOut))
+            else if (strVariable == "Enable !tslobby" && Boolean.TryParse(strValue, out blnOut))
                 mEnableTSStaging = blnOut;
             else if (strVariable == "Enable !tsteam" && Boolean.TryParse(strValue, out blnOut))
                 mEnableTSTeam = blnOut;
@@ -1856,7 +1850,7 @@ namespace PRoConEvents
                     case "!tslistsquads":
                         addToActionQueue(Commands.DisplayTSSquadList, speaker);
                         break;
-                    case "!tsstaging":
+                    case "!tslobby":
                         addToActionQueue(Commands.SetSyncToStaging, speaker);
                         break;
                     case "!tsteam":
@@ -1865,7 +1859,7 @@ namespace PRoConEvents
                     case "!tsnosync":
                         addToActionQueue(Commands.SetNoSync, speaker);
                         break;
-                    case "!tssquad":
+                    case "!tssync":
                         addToActionQueue(Commands.ResetUserSyncFlags, speaker);
                         break;
                 }
@@ -3294,7 +3288,7 @@ namespace PRoConEvents
         /// </summary>
         public void ResetAllUserSyncFlags()
         {
-            foreach(var user in mClientAllInfo)
+            foreach(MasterClient user in mClientAllInfo)
             {
                 user.IsSyncToTeam = false;
                 user.IsSyncToStaging = false;
@@ -3304,50 +3298,62 @@ namespace PRoConEvents
         /// <summary>Sets the NoSync flag for a player on the server.  This player will be ignored by Teamsync until the next round or until the flag is reset. </summary>
         public void SetNoSyncFlagForPlayer(string playerName)
         {
-            foreach (var user in mClientAllInfo.Where(user => user.GmClient.Name == playerName))
+            foreach (MasterClient user in mClientAllInfo)
             {
-                user.IsNoSync = true;
-                user.IsSyncToStaging = false;
-                user.IsSyncToTeam = false;
-                break;
+                if(user.HasGmClient && user.GmClient.Name == playerName)
+                {
+                    user.IsNoSync = true;
+                    user.IsSyncToStaging = false;
+                    user.IsSyncToTeam = false;
+                    break;
+                }
             }
         }
         /// <summary>Sets the Sync to Team flag for a player on the server.  This player will be kept in the team channel until the next round or until the flag is reset. </summary>
         public void SetSyncToTeamFlagForPlayer(string playerName)
         {
-            foreach (var user in mClientAllInfo.Where(user => user.GmClient.Name == playerName))
+            foreach (MasterClient user in mClientAllInfo)
             {
-                user.IsNoSync = false;
-                user.IsSyncToTeam = true;
-                user.IsSyncToStaging = false;
-                addToActionQueue(Commands.CheckClientForSwapping, user);
-                break;
+                if (user.HasGmClient && user.GmClient.Name == playerName)
+                {
+                    user.IsNoSync = false;
+                    user.IsSyncToTeam = true;
+                    user.IsSyncToStaging = false;
+                    addToActionQueue(Commands.CheckClientForSwapping, user);
+                    break;
+                }
             }
 
         }
         /// <summary>Sets the Sync to Staging flag for a player on the server.  This player will be kept in the staging channel until the next round or until the flag is reset. </summary>
         public void SetSyncToStagingFlagForPlayer(string playerName)
         {
-            foreach (var user in mClientAllInfo.Where(user => user.GmClient.Name == playerName))
+            foreach (MasterClient user in mClientAllInfo)
             {
-                user.IsNoSync = false;
-                user.IsSyncToTeam = false;
-                user.IsSyncToStaging = true;
-                addToActionQueue(Commands.CheckClientForSwapping, user);
-                break;
+                if (user.HasGmClient && user.GmClient.Name == playerName)
+                {
+                    user.IsNoSync = false;
+                    user.IsSyncToTeam = false;
+                    user.IsSyncToStaging = true;
+                    addToActionQueue(Commands.CheckClientForSwapping, user);
+                    break;
+                }
             }
             
         }
         /// <summary>Sets all player Sync flags to false.  This resumes default TSSync behavior.</summary>
         public void ResetSyncFlagsForPlayer(string playerName)
         {
-            foreach (var user in mClientAllInfo.Where(user => user.GmClient.Name == playerName))
+            foreach (MasterClient user in mClientAllInfo)
             {
-                user.IsNoSync = false;
-                user.IsSyncToTeam = false;
-                user.IsSyncToStaging = false;
-                addToActionQueue(Commands.CheckClientForSwapping, user);
-                break;
+                if (user.HasGmClient && user.GmClient.Name == playerName)
+                {
+                    user.IsNoSync = false;
+                    user.IsSyncToTeam = false;
+                    user.IsSyncToStaging = false;
+                    addToActionQueue(Commands.CheckClientForSwapping, user);
+                    break;
+                }
             }
 
         }
