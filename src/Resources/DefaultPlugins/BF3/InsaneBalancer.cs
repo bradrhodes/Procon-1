@@ -23,11 +23,9 @@ using System.Net;
 using System.Threading;
 using System.Diagnostics;
 
-
 using System.Web;
 using System.Data;
 using System.Text.RegularExpressions;
-
 
 using PRoCon.Core;
 using PRoCon.Core.Plugin;
@@ -37,15 +35,10 @@ using PRoCon.Core.Players.Items;
 using PRoCon.Core.Battlemap;
 using PRoCon.Core.Maps;
 
-
-
-
-
 namespace PRoConEvents {
 
     public class InsaneBalancer : PRoConPluginAPI, IPRoConPluginInterface
     {
-
         #region Variables
         int check_state_phase = 0;
         int login_state = 0;
@@ -117,6 +110,7 @@ namespace PRoConEvents {
 
         Object info_mutex = new Object();
 
+        List<String> scratch_list = new List<string>();
         #endregion
 
         #region Inner Classes
@@ -2322,6 +2316,451 @@ namespace PRoConEvents {
             removeTask("InsaneBalancer");
             attempts = 0;
         }
+
+        public String getPluginVariableGroup(String name) {
+            foreach (KeyValuePair<String, List<String>> group_pair in settings_group)
+                if (group_pair.Value.Contains(name))
+                    return group_pair.Key;
+
+            return "Settings";
+        }
+
+        private bool setPluginVarValue(string var, string val)
+        {
+            return setPluginVarValue(null, var, val);
+        }
+
+        private bool setPluginVarValue(string sender, string var, string val)
+        {
+            if (var == null || val == null)
+                return false;
+
+            if (!getPluginVars().Contains(var))
+            {
+                SendConsoleMessage(sender, "Insane Balancer: unknown variable \"" + var + "\"");
+                return false;
+            }
+
+            /* Parse Boolean Values */
+            bool booleanValue = false;
+            bool isBooleanValue = true;
+            if (Regex.Match(val, @"\s*(1|true|yes)\s*", RegexOptions.IgnoreCase).Success)
+                booleanValue = true;
+            else if (Regex.Match(val, @"\s*(0|false|no)\s*", RegexOptions.IgnoreCase).Success)
+                booleanValue = false;
+            else
+                isBooleanValue = false;
+
+
+            /* Parse Integer Values */
+            int integerValue = 0;
+            //bool isIntegerValue = int.TryParse(val, out integerValue) && integerValue >= 0;
+            bool isIntegerValue = int.TryParse(val, out integerValue);
+
+            /* Parse Float Values */
+            float floatValue = 0F;
+            bool isFloatValue = float.TryParse(val, out floatValue) && floatValue >= 0F;
+
+            /* Parse String List */
+            List<string> stringListValue = new List<string>(Regex.Split(val.Replace(";", ",").Replace("|", ","), @"\s*,\s*"));
+            bool isStringList = true;
+
+            /* Parse String var */
+            string stringValue = val;
+            bool isStringValue = (val != null);
+
+
+            if (isBooleanVar(var))
+            {
+                if (!isBooleanValue)
+                {
+                    SendConsoleMessage(sender, "\"" + val + "\" is invalid for " + var);
+                    return false;
+                }
+                setBooleanVarValue(var, booleanValue);
+                return true;
+            }
+            else if (isIntegerVar(var))
+            {
+                if (!isIntegerValue)
+                {
+                    SendConsoleMessage(sender, "\"" + val + "\" is invalid for " + var);
+                    return false;
+                }
+
+                setIntegerVarValue(var, integerValue);
+                return true;
+            }
+            else if (isFloatVar(var))
+            {
+                if (!isFloatValue)
+                {
+                    SendConsoleMessage(sender, "\"" + val + "\" is invalid for " + var);
+                    return false;
+                }
+
+                setFloatVarValue(var, floatValue);
+                return true;
+            }
+            else if (isStringListVar(var))
+            {
+                if (!isStringList)
+                {
+                    SendConsoleMessage(sender, "\"" + val + "\"  is invalid for " + var);
+                    return false;
+                }
+
+                setStringListVarValue(var, stringListValue);
+                return true;
+            }
+            else if (isStringVar(var))
+            {
+                if (!isStringValue)
+                {
+                    SendConsoleMessage(sender, "invalid value for " + var);
+                    return false;
+                }
+
+                setStringVarValue(var, stringValue);
+                return true;
+            }
+            else
+            {
+                SendConsoleMessage(sender, "Insane Balancer: unknown variable \"" + var + "\"");
+                return false;
+            }
+
+        }
+
+        private bool isIntegerVar(string var)
+        {
+            return this.integerVariables.ContainsKey(var);
+        }
+
+        private int getIntegerVarValue(string var)
+        {
+            if (!isIntegerVar(var))
+            {
+                SendConsoleMessage("unknown variable \"" + var + "\"");
+                return -1;
+            }
+
+            return this.integerVariables[var];
+        }
+
+        private bool setIntegerVarValue(string var, int val)
+        {
+            if (!isIntegerVar(var))
+            {
+                SendConsoleMessage("unknown variable \"" + var + "\"");
+                return false;
+            }
+
+            if (hasIntegerValidator(var))
+            {
+                integerVariableValidator validator = integerVarValidators[var];
+                if (validator(var, val) == false)
+                    return false;
+            }
+
+            this.integerVariables[var] = val;
+            return true;
+        }
+
+        private bool hasBooleanValidator(string var)
+        {
+            return booleanVarValidators.ContainsKey(var);
+        }
+
+        private bool hasIntegerValidator(string var)
+        {
+            return integerVarValidators.ContainsKey(var);
+        }
+
+        private bool hasStringValidator(string var)
+        {
+            return stringVarValidators.ContainsKey(var);
+        }
+
+        private bool isStringVar(string var)
+        {
+            return this.stringVariables.ContainsKey(var);
+        }
+
+        private string getStringVarValue(string var)
+        {
+            if (!isStringVar(var))
+            {
+                SendConsoleMessage("unknown variable \"" + var + "\"");
+                return "";
+            }
+
+            return this.stringVariables[var];
+        }
+
+        private bool setStringVarValue(string var, string val)
+        {
+            if (!isStringVar(var))
+            {
+                SendConsoleMessage("unknown variable \"" + var + "\"");
+                return false;
+            }
+
+
+            if (hasStringValidator(var))
+            {
+                stringVariableValidator validator = stringVarValidators[var];
+                if (validator(var, val) == false)
+                    return false;
+            }
+
+
+            string oldval = this.stringVariables[var];
+            this.stringVariables[var] = val;
+
+            return true;
+        }
+
+        private bool isStringListVar(string var)
+        {
+            return this.stringListVariables.ContainsKey(var);
+        }
+
+        private List<string> getStringListVarValue(string var)
+        {
+            if (!isStringListVar(var))
+            {
+                SendConsoleMessage("unknown variable \"" + var + "\"");
+                return new List<string>();
+            }
+
+            string[] out_list = Regex.Split(this.stringListVariables[var].Replace(";", ",").Replace("|", ","), @"\s*,\s*");
+            return new List<string>(out_list);
+        }
+
+        private bool setStringListVarValue(string var, List<string> val)
+        {
+            if (!isStringListVar(var))
+            {
+                SendConsoleMessage("unknown variable \"" + var + "\"");
+                return false;
+            }
+
+            List<string> cleanList = new List<string>();
+            foreach (string item in val)
+                if (Regex.Match(item, @"^\s*$").Success)
+                    continue;
+                else
+                    cleanList.Add(item);
+
+            //this.stringListVariables[var] = val;
+            this.stringListVariables[var] = String.Join("|", cleanList.ToArray());
+            return true;
+        }
+
+        private bool isFloatVar(string var)
+        {
+            return this.floatVariables.ContainsKey(var);
+        }
+
+        private float getFloatVarValue(string var)
+        {
+            if (!isFloatVar(var))
+            {
+                SendConsoleMessage("unknown variable \"" + var + "\"");
+                return -1F;
+            }
+
+            return this.floatVariables[var];
+        }
+
+        private bool setFloatVarValue(string var, float val)
+        {
+            if (!isFloatVar(var))
+            {
+                SendConsoleMessage("unknown variable \"" + var + "\"");
+                return false;
+            }
+
+            this.floatVariables[var] = val;
+            return true;
+        }
+
+        private bool isBooleanVar(string var)
+        {
+            return this.booleanVariables.ContainsKey(var);
+        }
+
+        private bool getBooleanVarValue(string var)
+        {
+            if (!isBooleanVar(var))
+            {
+                SendConsoleMessage("unknown variable \"" + var + "\"");
+                return false;
+            }
+
+            return this.booleanVariables[var];
+        }
+
+        private bool setBooleanVarValue(string var, bool val)
+        {
+            if (!isBooleanVar(var))
+            {
+                SendConsoleMessage("unknown variable \"" + var + "\"");
+                return false;
+            }
+
+            if (hasBooleanValidator(var))
+            {
+                booleanVariableValidator validator = booleanVarValidators[var];
+                if (validator(var, val) == false)
+                    return false;
+            }
+
+            this.booleanVariables[var] = val;
+            return true;
+        }
+
+        private string getPluginVarValue(string var)
+        {
+            return getPluginVarValue(null, var);
+        }
+
+        private string getPluginVarValue(string sender, string var)
+        {
+            if (!getPluginVars().Contains(var))
+            {
+                SendConsoleMessage(sender, "Insane Balancer: unknown variable \"" + var + "\"");
+                return "";
+            }
+
+            if (isBooleanVar(var))
+            {
+                return getBooleanVarValue(var).ToString();
+            }
+            else if (isIntegerVar(var))
+            {
+                return getIntegerVarValue(var).ToString();
+            }
+            else if (isFloatVar(var))
+            {
+                return getFloatVarValue(var).ToString();
+            }
+            else if (isStringListVar(var))
+            {
+                string lst = list2string(getStringListVarValue(var), "");
+                return lst;
+            }
+            else if (isStringVar(var))
+            {
+                return getStringVarValue(var);
+            }
+            else
+            {
+                SendConsoleMessage(sender, "Insane Balancer: unknown variable \"" + var + "\"");
+                return "";
+            }
+        }
+
+        private List<string> getPluginVars()
+        {
+            return getPluginVars(false);
+        }
+
+        private List<string> getPluginVars(bool hide)
+        {
+            List<string> vars = new List<string>();
+
+
+            vars.AddRange(getBooleanPluginVars());
+            vars.AddRange(getIntegerPluginVars());
+            vars.AddRange(getStringListPluginVars());
+            vars.AddRange(getFloatPluginVars());
+            vars.AddRange(getStringPluginVars());
+
+            if (hide && !getBooleanVarValue("advanced_mode"))
+            {
+                foreach (string hidden_var in hiddenVariables)
+                    vars.Remove(hidden_var);
+            }
+
+            return vars;
+        }
+
+        private List<string> getStringPluginVars()
+        {
+            return new List<string>(this.stringVariables.Keys);
+        }
+
+        private List<string> getStringListPluginVars()
+        {
+            return new List<string>(this.stringListVariables.Keys);
+        }
+
+        private List<string> getIntegerPluginVars()
+        {
+            return new List<string>(this.integerVariables.Keys);
+        }
+
+        private List<string> getFloatPluginVars()
+        {
+            return new List<string>(this.floatVariables.Keys);
+        }
+
+        private List<string> getBooleanPluginVars()
+        {
+            return new List<string>(this.booleanVariables.Keys);
+        }
+
+        public string playerstate2stringED(PlayerState state)
+        {
+            switch (state)
+            {
+                case PlayerState.alive:
+                    return "is alive";
+                case PlayerState.dead:
+                    return "is dead";
+                case PlayerState.kicked:
+                    return "was kicked";
+                case PlayerState.left:
+                    return "left the game";
+                case PlayerState.limbo:
+                    return "is in limbo";
+                default:
+                    return "(%player_state%)";
+            }
+
+        }
+
+        public string list2string(List<string> list, string glue)
+        {
+
+            if (list == null || list.Count == 0)
+                return "";
+            else if (list.Count == 1)
+                return list[0];
+
+            string last = list[list.Count - 1];
+            list.RemoveAt(list.Count - 1);
+
+            string str = "";
+            foreach (string item in list)
+                str += item + ", ";
+
+            return str + glue + last;
+        }
+
+        public string list2string(List<string> list)
+        {
+            return list2string(list, "and ");
+        }
+
+        private List<string> getAdminList() {
+            return getStringListVarValue("admin_list");
+        }
+
+
+
         #endregion
 
         #region Stats Fetching Thread
@@ -2425,6 +2864,105 @@ namespace PRoConEvents {
             }
 
         }
+
+        /// <summary>
+        /// Lets the stats fetching thread know a new player needs stats fetched.
+        /// </summary>
+        public void processNewPlayer(CPunkbusterInfo cpbiPlayer)
+        {
+            if (this.players.ContainsKey(cpbiPlayer.SoldierName))
+                this.players[cpbiPlayer.SoldierName].pbinfo = cpbiPlayer;
+            else
+            {
+                lock (mutex)
+                {
+
+                    // add new player to the queue, and wake the stats fetching loop
+                    if (!(new_player_queue.ContainsKey(cpbiPlayer.SoldierName) ||
+                          players.ContainsKey(cpbiPlayer.SoldierName) ||
+                          new_players_batch.ContainsKey(cpbiPlayer.SoldierName)))
+                    {
+                        DebugWrite("Queueing ^b" + cpbiPlayer.SoldierName + "^n for stats fetching", 1);
+                        new_player_queue.Add(cpbiPlayer.SoldierName, cpbiPlayer);
+                        wake_handle.Set();
+                    }
+
+                }
+            }
+        }
+
+
+        public void updateQueues(List<CPlayerInfo> lstPlayers)
+        {
+            lock (mutex)
+            {
+                scratch_handle.Reset();
+                // update the scratch list
+                scratch_list.Clear();
+                foreach (CPlayerInfo info in lstPlayers)
+                    if (!scratch_list.Contains(info.SoldierName))
+                        scratch_list.Add(info.SoldierName);
+
+                scratch_handle.Set();
+
+                // make a list of players to drop from the stats queue
+                List<String> players_to_remove = new List<string>();
+                foreach (KeyValuePair<String, CPunkbusterInfo> pair in new_player_queue)
+                    if (!scratch_list.Contains(pair.Key) && !players_to_remove.Contains(pair.Key))
+                        players_to_remove.Add(pair.Key);
+
+                // now actually drop them from the new players queue
+                foreach (String name in players_to_remove)
+                    if (new_player_queue.ContainsKey(name))
+                    {
+                        DebugWrite("Looks like ^b" + name + "^n left the server, removing him from stats queue", 1);
+                        new_player_queue.Remove(name);
+                    }
+
+                // make a list of players to drop from the new players batch
+                players_to_remove.Clear();
+                foreach (KeyValuePair<String, PlayerProfile> pair in new_players_batch)
+                    if (!scratch_list.Contains(pair.Key) && !players_to_remove.Contains(pair.Key))
+                        players_to_remove.Add(pair.Key);
+
+                // now actually drop them from the new players batch
+                foreach (String name in players_to_remove)
+                    if (new_players_batch.ContainsKey(name))
+                        new_players_batch.Remove(name);
+            }
+        }
+
+        public void syncPlayersList(List<CPlayerInfo> lstPlayers)
+        {
+
+            lock (mutex)
+            {
+                // first update the information taht players that still are in list
+                foreach (CPlayerInfo cpiPlayer in lstPlayers)
+                    if (this.players.ContainsKey(cpiPlayer.SoldierName))
+                        this.players[cpiPlayer.SoldierName].updateInfo(cpiPlayer);
+
+                //build a lookup table
+                Dictionary<String, bool> player_lookup = new Dictionary<string, bool>();
+                foreach (CPlayerInfo pinfo in lstPlayers)
+                    if (!player_lookup.ContainsKey(pinfo.SoldierName))
+                        player_lookup.Add(pinfo.SoldierName, true);
+
+
+                List<String> players_to_remove = new List<string>();
+
+                // now make a list of players that will need to be removed
+                foreach (KeyValuePair<String, PlayerProfile> pair in players)
+                    if (!player_lookup.ContainsKey(pair.Key) && !players_to_remove.Contains(pair.Key))
+                        players_to_remove.Add(pair.Key);
+
+                // now actually remove them
+                foreach (String pname in players_to_remove)
+                    if (players.ContainsKey(pname))
+                        players.Remove(pname);
+            }
+        }
+
         #endregion
 
         #region Sort Method Branching
@@ -3050,98 +3588,107 @@ namespace PRoConEvents {
             inGameCommand(getAdminList()[0], cmd);
         }
 
-        private void inGameCommand(string sender, string cmd)
+        public void ConsoleWrite(string msg)
         {
-
-            try
-            {
-
-                //Player commands
-                Match adminMovePlayerMatch = Regex.Match(cmd, @"\s*[!@/]\s*move\s+([^ ]+)", RegexOptions.IgnoreCase);
-                Match movePlayerMatch = Regex.Match(cmd, @"\s*[!@/]\s*move", RegexOptions.IgnoreCase);
-
-
-
-                Match showPlayerRoundStatsMatch = Regex.Match(cmd, @"\s*[!@/]\s*show\s+round\s+stats\s+([^ ]+)", RegexOptions.IgnoreCase);
-                Match showRoundStatsMatch = Regex.Match(cmd, @"\s*[!@/]\s*show\s+round\s+stats", RegexOptions.IgnoreCase);
-
-                Match showPlayerOnlineStatsMatch = Regex.Match(cmd, @"\s*[!@/]\s*show\s+online\s+stats\s+([^ ]+)", RegexOptions.IgnoreCase);
-                Match showOnlineStatsMatch = Regex.Match(cmd, @"\s*[!@/]\s*show\s+online\s+stats", RegexOptions.IgnoreCase);
-
-                Match showIdlePlayersMatch = Regex.Match(cmd, @"\s*[!@/]\s*show\s+idle", RegexOptions.IgnoreCase);
-                Match wlistInfoPlayerMatch = Regex.Match(cmd, @"\s*[!@/]\s*wlist_info\s+([^ ]+)", RegexOptions.IgnoreCase);
-
-                Match stopBalancerMatch = Regex.Match(cmd, @"\s*[!@/]\s*stop\s+check", RegexOptions.IgnoreCase);
-                Match startBalancerMatch = Regex.Match(cmd, @"\s*[!@/]\s*start\s+check", RegexOptions.IgnoreCase);
-                Match balanceLiveMatch = Regex.Match(cmd, @"\s*[!@/]\s*balance\s+live", RegexOptions.IgnoreCase);
-                Match balanceRoundMatch = Regex.Match(cmd, @"\s*[!@/]\s*balance\s+round", RegexOptions.IgnoreCase);
-
-
-                //Setting/Getting variables
-                Match setVarValueMatch = Regex.Match(cmd, @"\s*[!@/]\s*set\s+([^ ]+)\s+(.+)", RegexOptions.IgnoreCase);
-                Match setVarValueEqMatch = Regex.Match(cmd, @"\s*[!@/]\s*set\s+([^ ]+)\s*=\s*(.+)", RegexOptions.IgnoreCase);
-                Match setVarValueToMatch = Regex.Match(cmd, @"\s*[!@/]\s*set\s+([^ ]+)\s+to\s+(.+)", RegexOptions.IgnoreCase);
-                Match setVarTrueMatch = Regex.Match(cmd, @"\s*[!@/]\s*set\s+([^ ]+)", RegexOptions.IgnoreCase);
-                Match getVarValueMatch = Regex.Match(cmd, @"\s*[!@/]\s*get\s+([^ ]+)", RegexOptions.IgnoreCase);
-                Match enableMatch = Regex.Match(cmd, @"\s*[!@/]\s*enable\s+(.+)", RegexOptions.IgnoreCase);
-                Match disableMatch = Regex.Match(cmd, @"\s*[!@/]\s*disable\s+(.+)", RegexOptions.IgnoreCase);
-
-                //ConsoleWrite("Command run " + cmd + ", Matched: " + enableMatch.Success);
-                //Information
-                Match pluginSettingsMatch = Regex.Match(cmd, @"\s*[!@/]\s*settings", RegexOptions.IgnoreCase);
-
-
-                bool senderIsAdmin = isAdmin(sender);
-
-                DateTime now = utc;
-                if (showIdlePlayersMatch.Success && senderIsAdmin)
-                    showIdlePlayers(sender);
-                if (wlistInfoPlayerMatch.Success && senderIsAdmin)
-                    wlistInfoPlayer(sender, wlistInfoPlayerMatch.Groups[1].Value);
-                else if (startBalancerMatch.Success && senderIsAdmin)
-                    startBalancerCmd(sender, now);
-                else if (stopBalancerMatch.Success && senderIsAdmin)
-                    stopBalancerCmd(sender, now);
-                else if (showPlayerRoundStatsMatch.Success && senderIsAdmin)
-                    showPlayerRoundStatsCmd(sender, showPlayerRoundStatsMatch.Groups[1].Value);
-                else if (showRoundStatsMatch.Success && senderIsAdmin)
-                    showPlayerRoundStatsCmd(sender, null);
-
-                else if (showPlayerOnlineStatsMatch.Success && senderIsAdmin)
-                    showPlayerOnlineStatsCmd(sender, showPlayerOnlineStatsMatch.Groups[1].Value);
-                else if (showOnlineStatsMatch.Success && senderIsAdmin)
-                    showPlayerOnlineStatsCmd(sender, null);
-
-                else if (balanceLiveMatch.Success && senderIsAdmin)
-                    balanceLiveCmd(sender, now);
-                else if (balanceRoundMatch.Success && senderIsAdmin)
-                    balanceRoundCmd(sender, now);
-                else if (adminMovePlayerMatch.Success && senderIsAdmin)
-                    movePlayerCmd(sender, adminMovePlayerMatch.Groups[1].Value);
-                else if (movePlayerMatch.Success)
-                    movePlayerCmd(sender);
-                else if (setVarValueEqMatch.Success && senderIsAdmin)
-                    setVariableCmd(sender, setVarValueEqMatch.Groups[1].Value, setVarValueEqMatch.Groups[2].Value);
-                else if (setVarValueToMatch.Success && senderIsAdmin)
-                    setVariableCmd(sender, setVarValueToMatch.Groups[1].Value, setVarValueToMatch.Groups[2].Value);
-                else if (setVarValueMatch.Success && senderIsAdmin)
-                    setVariableCmd(sender, setVarValueMatch.Groups[1].Value, setVarValueMatch.Groups[2].Value);
-                else if (setVarTrueMatch.Success && senderIsAdmin)
-                    setVariableCmd(sender, setVarTrueMatch.Groups[1].Value, "1");
-                else if (getVarValueMatch.Success && senderIsAdmin)
-                    getVariableCmd(sender, getVarValueMatch.Groups[1].Value);
-                else if (enableMatch.Success && senderIsAdmin)
-                    enableVarGroupCmd(sender, enableMatch.Groups[1].Value);
-                else if (disableMatch.Success && senderIsAdmin)
-                    disableVarGroupCmd(sender, disableMatch.Groups[1].Value);
-                else if (pluginSettingsMatch.Success && senderIsAdmin)
-                    pluginSettingsCmd(sender);
-            }
-            catch (Exception e)
-            {
-                dump_exception(e);
-            }
+            string prefix = "[^b" + GetPluginName() + "^n] ";
+            this.ExecuteCommand("procon.protected.pluginconsole.write", prefix + msg);
         }
+
+        #region Messaging
+        private void SendPlayerMessage(string soldierName, string message) {
+            if (getBooleanVarValue("quiet_mode") && !isAdmin(soldierName))
+                return;
+
+            if (soldierName == null)
+                return;
+
+            /* Temporarily disable player messages until DICE 
+             * enables individual player messages
+             */
+
+            ExecCommand("admin.say", message, "player", soldierName);
+        }
+
+        private void SendGlobalMessage(string message) {
+            if (getBooleanVarValue("quiet_mode"))
+                SendConsoleMessage(message);
+            else
+                ExecCommand("admin.say", message, "all");
+
+        }
+
+        private void SendConsoleMessage(string name, string msg) {
+            List<string> admin_list = getAdminList();
+
+            DebugWrite(msg, 1);
+            msg = Regex.Replace(msg, @"\^[0-9a-zA-Z]", "");
+
+            if (name != null)
+                SendPlayerMessage(name, msg);
+
+
+        }
+
+        private void SendConsoleMessage(string msg) {
+            List<string> admin_list = getAdminList();
+            DebugWrite(msg, 1);
+
+            msg = Regex.Replace(msg, @"\^[0-9a-zA-Z]", "");
+
+
+
+            foreach (string name in admin_list) {
+                PlayerProfile pp = this.getPlayerProfile(name);
+                if (pp != null) {
+                    SendPlayerMessage(pp.name, msg);
+                }
+            }
+
+        }
+
+        private void genericSayAnnounce(List<string> messages) {
+            if (messages.Count == 0)
+                return;
+
+            int remain_time = getRemainingTime(utc, pluginState);
+
+            for (int i = 0; i < messages.Count; i++) {
+                string msg = messages[i];
+                msg = msg.Replace("%time%", remain_time.ToString());
+                SendGlobalMessage(msg);
+            }
+
+        }
+
+        private void warnAnnounce(int display_time) {
+            if (!isPluginWarning())
+                return;
+
+            DebugWrite("sending ^b" + pluginState.ToString() + "^n announcement", 1);
+
+            List<string> msg = new List<string>();
+            msg.Add("Teams are unbalanced");
+            msg.Add("Autobalancer starts in %time% secs");
+
+            if (getBooleanVarValue("warn_say"))
+                genericSayAnnounce(msg);
+        }
+
+        private void warnCountdown() {
+            if (!isPluginWarning())
+                return;
+
+            DebugWrite("sending ^b" + pluginState.ToString() + "^n countdown", 1);
+
+            int remain_time = getRemainingTime(utc, PluginState.warn);
+            string msg = "Autobalancer starts in " + remain_time.ToString() + "!";
+
+            if (getBooleanVarValue("warn_say"))
+                SendGlobalMessage(msg);
+        }
+
+
+        #endregion
 
         #endregion
 
@@ -3325,6 +3872,82 @@ namespace PRoConEvents {
                 dump_exception(e);
             }
         }
+
+        private void startWaitState(DateTime now) {
+            startWaitState(null, now);
+        }
+
+        private void startWarnState(DateTime now) {
+            startWarnState(null, now);
+        }
+
+        private void startWarnState(string sender, DateTime now) {
+            if (!isPluginChecking()) {
+                SendConsoleMessage(sender, "plugin is in " + pluginState.ToString() + " state");
+                return;
+            }
+
+            pluginState = PluginState.warn;
+            setStartTime(pluginState, now.AddSeconds(1));
+
+            DebugWrite("^b" + pluginState + "^n state started " + getStartTime(pluginState).ToString(), 1);
+        }
+
+        private void startWaitState(string sender, DateTime now) {
+
+            if (!isPluginStopped()) {
+                SendConsoleMessage(sender, "cannot start while balancer is in " + pluginState.ToString() + " state");
+                return;
+            }
+
+            if (sender != null)
+                setPluginVarValue("auto_start", "true");
+
+
+            pluginState = PluginState.wait;
+            setStartTime(pluginState, now.AddSeconds(1));
+
+
+            SendConsoleMessage(sender, "^b" + pluginState + "^n state started " + getStartTime(pluginState).ToString());
+        }
+
+        private void startStopState(DateTime now) {
+            startStopState(null, now);
+        }
+
+        private void startStopState(string sender, DateTime now) {
+            virtual_mode = false;
+            round_balancer = false;
+            level_started = false;
+            check_state_phase = 0;
+
+            if (sender != null)
+                setPluginVarValue("auto_start", "false");
+
+            pluginState = PluginState.stop;
+            setStartTime(pluginState, now.AddSeconds(1));
+
+            SendConsoleMessage(sender, "^b" + pluginState + "^n state started " + getStartTime(pluginState).ToString());
+        }
+
+        private void initializeBalancer() {
+            getServerInfo();
+            startStopState(utc);
+
+            // initialize the stats fetching thread
+            this.wake_handle = new EventWaitHandle(false, EventResetMode.ManualReset);
+            this.stats_fetching_thread = new Thread(new ThreadStart(stats_fetching_loop));
+            stats_fetching_thread.Start();
+
+        }
+
+        private void restartWaitState(DateTime now)
+        {
+            pluginState = PluginState.wait;
+            setStartTime(pluginState, now.AddSeconds(1));
+            DebugWrite("^b" + pluginState.ToString() + "^n state re-started " + getStartTime(pluginState).ToString() + "^0", 1);
+        }
+
         #endregion
 
         #region Game State Queries
@@ -3433,6 +4056,46 @@ namespace PRoConEvents {
         }
 
         /// <summary>
+        /// Checks to see if the round balancer should run I guess.
+        /// </summary>
+        public bool checkRoundBalance()
+        {
+            int round_interval = this.getIntegerVarValue("round_interval");
+            int round_total = serverInfo.TotalRounds;
+            int round_current = serverInfo.CurrentRound + 1;
+            string map = serverInfo.Map.ToLower();
+
+            int per_map_interval = getPerMapInterval();
+
+            /* if user set a value per-map, use that instead */
+            if (per_map_interval > 0)
+            {
+                DebugWrite("Using round_interval value of " + per_map_interval + " for map " + getPerMapKey(), 1);
+                round_interval = per_map_interval;
+            }
+
+            if (round_interval > round_total)
+            {
+                DebugWrite("^1^bWARNING^0^n: ^bround_interval(" + round_interval + ")^n is greater than total ^brounds(" + round_total + ")^n for ^bmap(" + map + ")^n^0", 1);
+                DebugWrite("setting ^bround_interval^n to ^b" + round_total + "^n internally for ^bmap(" + map + ")^n^0", 1);
+                round_interval = round_total;
+            }
+
+
+            DebugWrite("End of round detected", 1);
+            DebugWrite("Current round is ^b" + round_current + "^n/^b" + round_total + "^n,", 1);
+            DebugWrite("Round balance interval is ^b" + round_interval + "^n^0", 1);
+
+            if (!getBooleanVarValue("balance_round"))
+                return false;
+
+            if (round_current % round_interval == 0)
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
         /// Finds the team with the lowest score.
         /// </summary>
         /// <returns>The TeamID of the team with the lowest score.</returns>
@@ -3470,6 +4133,147 @@ namespace PRoConEvents {
             return min_team;
         }
 
+        private bool isTimeLeft(int remain_time, int msg_display_time, int msg_interval_time, int countdown_time)
+        {
+            return (remain_time % msg_interval_time) == 0 && (remain_time - msg_display_time) >= countdown_time;
+        }
+
+        public int getPerMapInterval() {
+
+            String key = getPerMapKey();
+
+            if (key.Length > 0)
+                return getIntegerVarValue(key);
+
+            return 0;
+        }
+
+        public String getPerMapKey() {
+            string mode = serverInfo.GameMode.ToLower().Trim();
+            string map = serverInfo.Map.ToLower().Trim();
+
+            if (maps.ContainsKey(map) && modes.ContainsKey(mode))
+                return modes[mode] + "_" + maps[map];
+
+            return "";
+        }
+
+        public static string TN(int teamNo) {
+
+            switch (teamNo) {
+                case 0:
+                    return "Neutral";
+                case 1:
+                    return "US";
+                case 2:
+                    return "RU";
+                default:
+                    return "Unknown";
+            }
+        }
+
+        public static string SQN(int squadNo) {
+
+            switch (squadNo) {
+                case 0:
+                    return "Neutral";
+                case 1:
+                    return "Alpha";
+                case 2:
+                    return "Bravo";
+                case 3:
+                    return "Charlie";
+                case 4:
+                    return "Delta";
+                case 5:
+                    return "Echo";
+                case 6:
+                    return "Foxtrot";
+                case 7:
+                    return "Golf";
+                case 8:
+                    return "Hotel";
+                case 9:
+                    return "India";
+                case 10:
+                    return "Juliet";
+                case 11:
+                    return "Kilo";
+                case 12:
+                    return "Lima";
+                case 13:
+                    return "Mike";
+                case 14:
+                    return "November";
+                case 15:
+                    return "Oscar";
+                case 16:
+                    return "Papa";
+                case 17:
+                    return "X-Alpha";
+                case 18:
+                    return "X-Bravo";
+                case 19:
+                    return "X-Charlie";
+                case 20:
+                    return "X-Delta";
+                case 21:
+                    return "X-Echo";
+                case 22:
+                    return "X-Foxtrot";
+                case 23:
+                    return "X-Golf";
+                case 24:
+                    return "X-Hotel";
+                case 25:
+                    return "X-India";
+                case 26:
+                    return "X-Juliet";
+                case 27:
+                    return "X-Kilo";
+                case 28:
+                    return "X-Lima";
+                case 29:
+                    return "X-Mike";
+                case 30:
+                    return "X-November";
+                case 31:
+                    return "X-Oscar";
+                case 32:
+                    return "X-Papa";
+
+                default:
+                    if (squadNo > 16 && squadNo <= 32)
+                        return "S-" + squadNo;
+                    else
+                        return "Unknown";
+            }
+        }
+
+        public double getRoundMinutes()
+        {
+            return utc.Subtract(startRoundTime).TotalMinutes;
+        }
+
+        private bool isPlayerIdle(PlayerProfile player)
+        {
+            int last_kill_time = getIntegerVarValue("last_kill_time");
+            int last_death_time = getIntegerVarValue("last_death_time");
+            int last_chat_time = getIntegerVarValue("last_chat_time");
+            int last_spawn_time = getIntegerVarValue("last_spawn_time");
+            int last_score_time = getIntegerVarValue("last_score_time");
+
+
+            if (player.getLastKill() > last_kill_time &&
+                player.getLastDeath() > last_death_time &&
+                player.getLastChat() > last_chat_time &&
+                player.getLastSpawn() > last_spawn_time &&
+                player.getLastScore() > last_score_time)
+                return true;
+
+            return false;
+
+        }
         #endregion
 
         #region Player Based Calculations
@@ -3625,6 +4429,31 @@ namespace PRoConEvents {
             return whitelist.Contains(field);
         }
 
+        /// <summary>
+        /// Figures out how many players are on each team.
+        /// </summary>
+        /// <returns>A dictionary where the key is the TeamID and the value is the number of players on that team.</returns>
+        public Dictionary<int, int> getPlayerCount() {
+
+            /* initialize hash with player count for 16 teams*/
+            Dictionary<int, int> player_count = new Dictionary<int, int>();
+            for (int i = 0; i < 16; i++)
+                player_count[i] = 0;
+
+            List<PlayerProfile> player_list = getPlayersProfile("");
+
+            foreach (PlayerProfile player in player_list)
+                player_count[player.getTeamId()]++;
+
+
+            return player_count;
+        }
+
+        private bool isAdmin(string soldier) {
+            List<string> admin_list = getAdminList();
+            return admin_list.Contains(soldier);
+        }
+
         #endregion
 
         #region Player List Lamdas
@@ -3718,6 +4547,77 @@ namespace PRoConEvents {
             return list;
         }
 
+        /// <summary>
+        /// Get all players from a particular team not in a squad.
+        /// </summary>
+        private List<PlayerProfile> getNoSquadPlayers(int teamId) {
+            Dictionary<int, PlayerSquad> squads = getSquads(teamId);
+            /* return the members of the no-squad */
+            return squads[0].getMembers();
+        }
+
+        /// <summary>
+        /// Get a list of squads on a particular team (excluding the "squad" of people not in a squad)
+        /// </summary>
+        private List<PlayerSquad> getAllSquads(int teamId)
+        {
+            Dictionary<int, PlayerSquad> squads = getSquads(teamId);
+
+            /* remove the no-squad */
+            squads.Remove(0);
+
+            List<PlayerSquad> list = new List<PlayerSquad>();
+            foreach (KeyValuePair<int, PlayerSquad> pair in squads)
+                list.Add(pair.Value);
+
+            return list;
+        }
+
+        /// <summary>
+        /// Get a list of squads on a particular team that are not empty (excluding the "squad" of people not in a squad)
+        /// </summary>
+        /// <param name="teamId"></param>
+        /// <returns></returns>
+        private List<PlayerSquad> getNonEmptySquads(int teamId)
+        {
+            Dictionary<int, PlayerSquad> squads = getSquads(teamId);
+
+            /* remove the no-squad */
+            squads.Remove(0);
+
+            /* get only the non-empty squads */
+            List<PlayerSquad> list = new List<PlayerSquad>();
+            foreach (KeyValuePair<int, PlayerSquad> pair in squads)
+                if (pair.Value.getCount() > 0)
+                    list.Add(pair.Value);
+
+            return list;
+        }
+
+        /// <summary>
+        /// Gets a dictionary of all squads on a team.
+        /// </summary>
+        private Dictionary<int, PlayerSquad> getSquads(int teamId)
+        {
+            int num_squads = 8;
+            if (teamId == 0)
+                num_squads = 16;
+
+            List<PlayerProfile> player_list = getPlayersProfile("");
+
+            Dictionary<int, PlayerSquad> squads = new Dictionary<int, PlayerSquad>();
+            for (int i = 0; i <= num_squads; i++)
+                squads[i] = new PlayerSquad(teamId, i);
+
+            foreach (PlayerProfile player in player_list)
+            {
+                if (player.getTeamId() == teamId && squads.ContainsKey(player.getSquadId()))
+                    squads[player.getSquadId()].addPlayer(player);
+            }
+
+            return squads;
+        }
+
         #endregion
 
         #region Debug Output
@@ -3734,6 +4634,78 @@ namespace PRoConEvents {
                 count++;
             }
         }
+
+        private void listSquad(PlayerSquad sq)
+        {
+            List<PlayerProfile> members = sq.getMembers();
+
+            DebugWrite("Team(^b" + TN(sq.getTeamId()) + "^n).Squad(^b" + SQN(sq.getSquadId()) + "^n): " + sq.getCount() + " players", 3);
+            int count = 1;
+            foreach (PlayerProfile pp in members)
+                DebugWrite("    " + count++ + ".  ^b" + pp + "^n", 3);
+        }
+
+        private void listSquads(List<PlayerSquad> sqs)
+        {
+            foreach (PlayerSquad sq in sqs)
+                listSquad(sq);
+        }
+
+        public void DebugWrite(string msg, int level)
+        {
+            if (getIntegerVarValue("debug_level") >= level)
+                ConsoleWrite(msg);
+        }
+
+        public void dump_exception(Exception e)
+        {
+            if (e.GetType().Equals(typeof(ThreadAbortException)))
+            {
+                Thread.ResetAbort();
+                return;
+            }
+
+
+            DebugWrite("^1^bEXCEPTION^0^n: " + e.GetType() + ": " + e.Message, 1);
+            try
+            {
+                string class_name = "InsaneBalancer";
+                // Create a temporary file
+                string path = class_name + ".dump";
+
+
+                DebugWrite("^1Extra information dumped in file " + path, 1);
+                using (FileStream fs = File.Open(path, FileMode.Append))
+                {
+                    String version = GetPluginVersion();
+                    String trace_str = "\n-----------------------------------------------\n";
+                    trace_str += "Version: " + class_name + " " + version + "\n";
+                    trace_str += "Date: " + DateTime.Now.ToString() + "\n";
+                    trace_str += e.GetType() + ": " + e.Message + "\n\n";
+                    trace_str += "Stack Trace: \n" + e.StackTrace + "\n\n";
+                    trace_str += "MSIL Stack Trace:\n";
+
+                    StackTrace trace = new StackTrace(e);
+                    StackFrame[] frames = trace.GetFrames();
+                    foreach (StackFrame frame in frames)
+                        trace_str += "    " + frame.GetMethod() + ", IL: " + String.Format("0x{0:X}", frame.GetILOffset()) + "\n";
+
+
+                    Byte[] info = new UTF8Encoding(true).GetBytes(trace_str);
+                    fs.Write(info, 0, info.Length);
+                }
+
+
+            }
+            catch (Exception ex)
+            {
+                DebugWrite("^1^bWARNING^0^n: Unable to dump extra exception information.", 1);
+                DebugWrite("^1^bEXCEPTION^0^n:  " + ex.TargetSite + ": " + ex.Message, 1);
+
+            }
+        }
+
+
         #endregion
 
         #region Things that manipulate the Battlefield server
@@ -4141,6 +5113,50 @@ namespace PRoConEvents {
         /// Empty method body.
         /// </summary>
         private void fixSquads() {
+
+        }
+
+        private void enforceDelayedMove(PlayerProfile vp)
+        {
+
+            int dtid = vp.getDelayedTeamId();
+            int dsid = vp.getDelayedSquadId();
+
+            vp.resetDelayedTeamSquad();
+
+            /* if player is already in the delayed team, ignore him */
+            if (dtid == vp.getTeamId())
+            {
+                DebugWrite("Player " + vp + " is already in to ^bDTeam(" + TN(dtid) + ")^n, will skip", 3);
+                return;
+            }
+
+            /* if teams are already balanced, ignore this player */
+            DebugWrite("I will now re-check if teams are balanced", 3);
+            if (teamsBalanced())
+            {
+                DebugWrite("Teams are balanced, will not move player " + vp, 3);
+                return;
+            }
+            else
+            {
+                /* if teams are not balanced we still have to check direction of inbalancing because of possible manual move or standart balancer work! */
+                Dictionary<int, int> player_count = getPlayerCount();
+
+                int team_sz = serverInfo.MaxPlayerCount / 2;
+                int bigger_team = (player_count[1] > player_count[2]) ? 1 : 2;
+                int smaller_team = (player_count[1] > player_count[2]) ? 2 : 1;
+
+                if (bigger_team == dtid)
+                {
+                    DebugWrite("Teams are unbalanced, but in other direction that was marked for this player. Will not move player " + vp, 3);
+                    return;
+                }
+
+            }
+
+            DebugWrite("Moving player " + vp + " from ^bTeam(" + TN(vp.getTeamId()) + ").Squad(" + SQN(vp.getSquadId()) + ")^n to ^bDTeam(" + TN(dtid) + ").DSquad(" + SQN(dsid) + ")^n", 3);
+            movePlayer(vp, dtid, dsid);
 
         }
 
@@ -5105,6 +6121,20 @@ namespace PRoConEvents {
             return players_moved;
 
         }
+
+        private void resetPlayerStats()
+        {
+
+            List<PlayerProfile> players_list = getPlayersProfile("");
+            foreach (PlayerProfile player in players_list)
+            {
+                player.resetStats();
+            }
+
+            /* reset the fail-safe counter */
+            max_player_count = 0;
+
+        }
         #endregion
 
         #region Things that only manipulate the server model
@@ -5171,7 +6201,556 @@ namespace PRoConEvents {
 
         #endregion
 
-        #region Unreferenced garbage
+        #region Console Commands
+        /// <summary>
+        /// Translates from strings entered in the Battlefield console to method calls in InsaneBalancer.  Ugly as fuck.
+        /// </summary>
+        private void inGameCommand(string sender, string cmd)
+        {
+
+            try
+            {
+
+                //Player commands
+                Match adminMovePlayerMatch = Regex.Match(cmd, @"\s*[!@/]\s*move\s+([^ ]+)", RegexOptions.IgnoreCase);
+                Match movePlayerMatch = Regex.Match(cmd, @"\s*[!@/]\s*move", RegexOptions.IgnoreCase);
+
+
+
+                Match showPlayerRoundStatsMatch = Regex.Match(cmd, @"\s*[!@/]\s*show\s+round\s+stats\s+([^ ]+)", RegexOptions.IgnoreCase);
+                Match showRoundStatsMatch = Regex.Match(cmd, @"\s*[!@/]\s*show\s+round\s+stats", RegexOptions.IgnoreCase);
+
+                Match showPlayerOnlineStatsMatch = Regex.Match(cmd, @"\s*[!@/]\s*show\s+online\s+stats\s+([^ ]+)", RegexOptions.IgnoreCase);
+                Match showOnlineStatsMatch = Regex.Match(cmd, @"\s*[!@/]\s*show\s+online\s+stats", RegexOptions.IgnoreCase);
+
+                Match showIdlePlayersMatch = Regex.Match(cmd, @"\s*[!@/]\s*show\s+idle", RegexOptions.IgnoreCase);
+                Match wlistInfoPlayerMatch = Regex.Match(cmd, @"\s*[!@/]\s*wlist_info\s+([^ ]+)", RegexOptions.IgnoreCase);
+
+                Match stopBalancerMatch = Regex.Match(cmd, @"\s*[!@/]\s*stop\s+check", RegexOptions.IgnoreCase);
+                Match startBalancerMatch = Regex.Match(cmd, @"\s*[!@/]\s*start\s+check", RegexOptions.IgnoreCase);
+                Match balanceLiveMatch = Regex.Match(cmd, @"\s*[!@/]\s*balance\s+live", RegexOptions.IgnoreCase);
+                Match balanceRoundMatch = Regex.Match(cmd, @"\s*[!@/]\s*balance\s+round", RegexOptions.IgnoreCase);
+
+
+                //Setting/Getting variables
+                Match setVarValueMatch = Regex.Match(cmd, @"\s*[!@/]\s*set\s+([^ ]+)\s+(.+)", RegexOptions.IgnoreCase);
+                Match setVarValueEqMatch = Regex.Match(cmd, @"\s*[!@/]\s*set\s+([^ ]+)\s*=\s*(.+)", RegexOptions.IgnoreCase);
+                Match setVarValueToMatch = Regex.Match(cmd, @"\s*[!@/]\s*set\s+([^ ]+)\s+to\s+(.+)", RegexOptions.IgnoreCase);
+                Match setVarTrueMatch = Regex.Match(cmd, @"\s*[!@/]\s*set\s+([^ ]+)", RegexOptions.IgnoreCase);
+                Match getVarValueMatch = Regex.Match(cmd, @"\s*[!@/]\s*get\s+([^ ]+)", RegexOptions.IgnoreCase);
+                Match enableMatch = Regex.Match(cmd, @"\s*[!@/]\s*enable\s+(.+)", RegexOptions.IgnoreCase);
+                Match disableMatch = Regex.Match(cmd, @"\s*[!@/]\s*disable\s+(.+)", RegexOptions.IgnoreCase);
+
+                //ConsoleWrite("Command run " + cmd + ", Matched: " + enableMatch.Success);
+                //Information
+                Match pluginSettingsMatch = Regex.Match(cmd, @"\s*[!@/]\s*settings", RegexOptions.IgnoreCase);
+
+
+                bool senderIsAdmin = isAdmin(sender);
+
+                DateTime now = utc;
+                if (showIdlePlayersMatch.Success && senderIsAdmin)
+                    showIdlePlayers(sender);
+                if (wlistInfoPlayerMatch.Success && senderIsAdmin)
+                    wlistInfoPlayer(sender, wlistInfoPlayerMatch.Groups[1].Value);
+                else if (startBalancerMatch.Success && senderIsAdmin)
+                    startBalancerCmd(sender, now);
+                else if (stopBalancerMatch.Success && senderIsAdmin)
+                    stopBalancerCmd(sender, now);
+                else if (showPlayerRoundStatsMatch.Success && senderIsAdmin)
+                    showPlayerRoundStatsCmd(sender, showPlayerRoundStatsMatch.Groups[1].Value);
+                else if (showRoundStatsMatch.Success && senderIsAdmin)
+                    showPlayerRoundStatsCmd(sender, null);
+
+                else if (showPlayerOnlineStatsMatch.Success && senderIsAdmin)
+                    showPlayerOnlineStatsCmd(sender, showPlayerOnlineStatsMatch.Groups[1].Value);
+                else if (showOnlineStatsMatch.Success && senderIsAdmin)
+                    showPlayerOnlineStatsCmd(sender, null);
+
+                else if (balanceLiveMatch.Success && senderIsAdmin)
+                    balanceLiveCmd(sender, now);
+                else if (balanceRoundMatch.Success && senderIsAdmin)
+                    balanceRoundCmd(sender, now);
+                else if (adminMovePlayerMatch.Success && senderIsAdmin)
+                    movePlayerCmd(sender, adminMovePlayerMatch.Groups[1].Value);
+                else if (movePlayerMatch.Success)
+                    movePlayerCmd(sender);
+                else if (setVarValueEqMatch.Success && senderIsAdmin)
+                    setVariableCmd(sender, setVarValueEqMatch.Groups[1].Value, setVarValueEqMatch.Groups[2].Value);
+                else if (setVarValueToMatch.Success && senderIsAdmin)
+                    setVariableCmd(sender, setVarValueToMatch.Groups[1].Value, setVarValueToMatch.Groups[2].Value);
+                else if (setVarValueMatch.Success && senderIsAdmin)
+                    setVariableCmd(sender, setVarValueMatch.Groups[1].Value, setVarValueMatch.Groups[2].Value);
+                else if (setVarTrueMatch.Success && senderIsAdmin)
+                    setVariableCmd(sender, setVarTrueMatch.Groups[1].Value, "1");
+                else if (getVarValueMatch.Success && senderIsAdmin)
+                    getVariableCmd(sender, getVarValueMatch.Groups[1].Value);
+                else if (enableMatch.Success && senderIsAdmin)
+                    enableVarGroupCmd(sender, enableMatch.Groups[1].Value);
+                else if (disableMatch.Success && senderIsAdmin)
+                    disableVarGroupCmd(sender, disableMatch.Groups[1].Value);
+                else if (pluginSettingsMatch.Success && senderIsAdmin)
+                    pluginSettingsCmd(sender);
+            }
+            catch (Exception e)
+            {
+                dump_exception(e);
+            }
+        }
+
+        public void balanceLiveCmd(string sender, DateTime now)
+        {
+
+            balanceLive(now);
+            restartWaitState(now);
+        }
+
+        public void balanceRoundCmd(string sender, DateTime now)
+        {
+            try
+            {
+                balanceRound(1);
+                restartWaitState(utc);
+                resetPlayerStats();
+            }
+            catch (Exception e)
+            {
+                dump_exception(e);
+            }
+
+        }
+
+        public void showIdlePlayers(string sender) {
+            List<PlayerProfile> players_list = getPlayersProfile("");
+
+            List<PlayerProfile> list = new List<PlayerProfile>();
+
+            foreach (PlayerProfile player in players_list)
+                if (isPlayerIdle(player))
+                    list.Add(player);
+
+
+            SendConsoleMessage(sender, " == " + list.Count + " idle players (watching for last " + Math.Round(getRoundMinutes(), 2) + " minutes)  ==");
+            foreach (PlayerProfile player in list)
+                SendConsoleMessage(sender, player + ": " + player.getIdleStatistics());
+        }
+
+        public void wlistInfoPlayer(string sender, string pname) {
+
+            PlayerProfile player = getPlayerProfile(pname);
+            if (player == null) {
+                SendConsoleMessage(sender, "^1^bWARNING^n^0: could not find ^b" + pname + "^n in game");
+                return;
+            }
+
+            SendConsoleMessage(sender, " == White List Info for " + pname + "  ==");
+
+            List<String> list_names = new List<string>();
+            list_names.Add("player_move_wlist");
+            list_names.Add("clan_move_wlist");
+            list_names.Add("player_safe_wlist");
+            list_names.Add("clan_move_wlist");
+            list_names.Add("player_safe_wlist");
+            list_names.Add("clan_safe_wlist");
+
+            foreach (String list in list_names) {
+                Boolean inlist = isPlayerInWhiteList(player, list);
+                String inlist_str = (inlist) ? "^b" + inlist.ToString() + "^n" : inlist.ToString();
+                SendConsoleMessage(sender, list + " = " + inlist_str);
+            }
+
+        }
+
+        public void showPlayerRoundStatsCmd(string sender, string player_name) {
+            List<PlayerProfile> players_list;
+            if (player_name == null)
+                players_list = getPlayersProfile("");
+            else
+                players_list = getPlayersProfile(player_name);
+
+
+            if (players_list.Count == 0)
+                return;
+
+            int i = 1;
+            SendConsoleMessage(sender, " == Round Statistics ( " + Math.Round(getRoundMinutes(), 2) + " minutes) ==");
+            foreach (PlayerProfile player in players_list) {
+                SendConsoleMessage(sender, i + ". " + player + ": " + player.getRoundStatistics());
+                i++;
+            }
+        }
+
+        public void showPlayerOnlineStatsCmd(string sender, string player_name) {
+            List<PlayerProfile> players_list;
+            if (player_name == null)
+                players_list = getPlayersProfile("");
+            else
+                players_list = getPlayersProfile(player_name);
+
+
+            if (players_list.Count == 0)
+                return;
+
+            int i = 1;
+
+            SendConsoleMessage(sender, " == Online Statistics ==");
+            foreach (PlayerProfile player in players_list) {
+                SendConsoleMessage(sender, i + ". " + player + ": " + player.getOnlineStatistics());
+                i++;
+            }
+        }
+
+        private void startBalancerCmd(string sender, DateTime now) {
+            setBooleanVarValue("balance_live", true);
+            startWaitState(now);
+        }
+
+        private void stopBalancerCmd(string sender, DateTime now) {
+            setBooleanVarValue("balance_live", false);
+            startStopState(now);
+        }
+
+        private void enableVarGroupCmd(string sender, string group) {
+            if (group.CompareTo("plugin") == 0) {
+                DebugWrite("Disabling plugin", 1);
+                this.ExecuteCommand("procon.plugin.enable", "InsaneBalancer", "false");
+            }
+            enablePluginVarGroup(sender, group);
+        }
+
+        private void disableVarGroupCmd(string sender, string group) {
+            if (group.CompareTo("plugin") == 0) {
+                DebugWrite("Enabling plugin", 1);
+                this.ExecuteCommand("procon.plugin.enable", "InsaneBalancer", "true");
+            }
+
+            disablePluginVarGroup(sender, group);
+        }
+
+        private bool setPluginVarGroup(string sender, string group, string val) {
+            String msg = "";
+            if (group == null) {
+                msg = "no variables to enable";
+                DebugWrite(msg, 1);
+                SendConsoleMessage(sender, msg);
+                return false;
+            }
+
+
+            group = group.Replace(";", ",");
+            List<string> vars = new List<string>(Regex.Split(group, @"\s*,\s*", RegexOptions.IgnoreCase));
+            foreach (string var in vars) {
+                if (setPluginVarValue(sender, var, val)) {
+                    msg = var + " set to \"" + val + "\"";
+                    SendConsoleMessage(sender, msg);
+                }
+
+            }
+            return true;
+        }
+
+        private bool enablePluginVarGroup(string sender, string group) {
+            //search for all variables matching
+            List<string> vars = getVariableNames(group);
+            String msg = "";
+            if (vars.Count == 0) {
+                msg = "no variables match \"" + group + "\"";
+                //ConsoleWrite(msg);
+                SendConsoleMessage(sender, msg);
+                return false;
+            }
+
+            return setPluginVarGroup(sender, String.Join(",", vars.ToArray()), "true");
+        }
+
+        private List<string> getVariableNames(string group) {
+            List<string> names = new List<string>();
+            List<string> list = new List<string>(Regex.Split(group, @"\s*,\s*"));
+            List<string> vars = getPluginVars();
+            foreach (string search in list) {
+                foreach (string var in vars) {
+                    if (var.Contains(search))
+                        if (!names.Contains(var))
+                            names.Add(var);
+                }
+            }
+
+            return names;
+        }
+
+        private bool disablePluginVarGroup(string sender, string group) {
+            //search for all variables matching
+            List<string> vars = getVariableNames(group);
+
+            if (vars.Count == 0) {
+                SendConsoleMessage(sender, "no variables match \"" + group + "\"");
+                return false;
+            }
+            return setPluginVarGroup(sender, String.Join(",", vars.ToArray()), "false");
+        }
+
+        private void getVariableCmd(string sender, string var) {
+            string val = getPluginVarValue(sender, var);
+
+            if (var.Equals("pass"))
+                val = Regex.Replace(val, @".", "*");
+
+            String msg = var + " = " + val;
+
+            //ConsoleWrite(msg);
+            SendConsoleMessage(sender, msg);
+        }
+
+        private void setVariableCmd(string sender, string var, string val) {
+
+            if (setPluginVarValue(sender, var, val)) {
+                SendConsoleMessage(sender, var + " set to \"" + val + "\"");
+            }
+        }
+
+        private void pluginSettingsCmd(string sender) {
+            SendConsoleMessage(sender, " == Insane Balancer Settings == ");
+            foreach (string var in getPluginVars()) {
+                SendConsoleMessage(sender, var + " = " + getPluginVarValue(sender, var));
+            }
+        }
+
+        #endregion
+
+        #region PRoCon Layer Calls
+        private PlayerProfile getPlayerProfile(CPlayerInfo info) {
+            return getPlayerProfile(info.SoldierName);
+        }
+
+        private PlayerProfile getPlayerProfile(string name) {
+            PlayerProfile pp;
+            this.players.TryGetValue(name, out pp);
+            return pp;
+        }
+        #endregion
+
+        #region Needless Value Validators
+        private bool isInGameCommand(string str)
+        {
+            if (Regex.Match(str, @"^\s*[@/!]").Success)
+                return true;
+
+            return false;
+        }
+
+        public bool stringValidator(string var, string value) {
+            if (var.CompareTo("round_sort") == 0) {
+                if (!strAssertSort(value))
+                    return false;
+            }
+            if (var.CompareTo("live_sort") == 0) {
+                if (!strAssertSort(value))
+                    return false;
+            }
+            return true;
+        }
+
+        public bool commandValidator(string var, string value) {
+
+            try {
+                inGameCommand(value);
+            } catch (Exception e) {
+                dump_exception(e);
+            }
+            return false;
+        }
+ 
+        public List<String> getAllowedSorts() {
+            List<string> sort_methods = new List<string>();
+
+
+            sort_methods.Add("kdr_asc_round");
+            sort_methods.Add("kdr_desc_round");
+            sort_methods.Add("spm_asc_round");
+            sort_methods.Add("spm_desc_round");
+            sort_methods.Add("kpm_asc_round");
+            sort_methods.Add("kpm_desc_round");
+            sort_methods.Add("score_asc_round");
+            sort_methods.Add("score_desc_round");
+            sort_methods.Add("time_asc_round");
+            sort_methods.Add("time_desc_round");
+
+
+            sort_methods.Add("kdr_asc_online");
+            sort_methods.Add("kdr_desc_online");
+            sort_methods.Add("kpm_asc_online");
+            sort_methods.Add("kpm_desc_online");
+            sort_methods.Add("spm_asc_online");
+            sort_methods.Add("spm_desc_online");
+            sort_methods.Add("kills_asc_online");
+            sort_methods.Add("kills_desc_online");
+            sort_methods.Add("deaths_asc_online");
+            sort_methods.Add("deaths_desc_online");
+            sort_methods.Add("skill_asc_online");
+            sort_methods.Add("skill_desc_online");
+            sort_methods.Add("quits_asc_online");
+            sort_methods.Add("quits_desc_online");
+            sort_methods.Add("accuracy_asc_online");
+            sort_methods.Add("accuracy_desc_online");
+            sort_methods.Add("score_asc_online");
+            sort_methods.Add("score_desc_online");
+            sort_methods.Add("rank_asc_online");
+            sort_methods.Add("rank_desc_online");
+
+            sort_methods.Add("random_value");
+
+            return sort_methods;
+        }
+
+        public bool booleanValidator(string var, bool value) {
+            return true;
+        }
+
+        /// <summary>
+        /// Ridiculously complicated way to validate that particular variables are valid.
+        /// </summary>
+        public bool integerValidator(string var, int value) {
+
+            if (var.CompareTo("warn_msg_interval_time") == 0) {
+                if (!intAssertGTE(var, value, 0) ||
+                    !intAssertLTE(var, value, "warn_msg_total_time"))
+                    return false;
+            }
+
+            if (var.CompareTo("warn_msg_countdown_time") == 0) {
+                if (!intAssertGTE(var, value, 0) ||
+                    !intAssertLTE(var, value, "warn_msg_total_time"))
+                    return false;
+            }
+
+            if (var.CompareTo("warn_msg_total_time") == 0) {
+                if (!intAssertGTE(var, value, 0) ||
+                    !intAssertGTE(var, value, "warn_msg_interval_time") ||
+                    !intAssertGTE(var, value, "warn_msg_countdown_time"))
+                    return false;
+            }
+
+            if (var.CompareTo("warn_msg_display_time") == 0) {
+                if (!intAssertGTE(var, value, 0) ||
+                    !intAssertLTE(var, value, "warn_msg_total_time"))
+                    return false;
+            }
+
+            if (var.CompareTo("balance_threshold") == 0 ||
+                var.CompareTo("wait_death_count") == 0) {
+                if (!intAssertGT(var, value, 0))
+                    return false;
+            }
+
+            if (var.CompareTo("round_interval") == 0) {
+
+                if (!intAssertGT(var, value, 0))
+                    return false;
+
+                if (serverInfo == null)
+                    return true;
+
+                if (value > serverInfo.TotalRounds) {
+                    SendConsoleMessage("^1^bERROR^0^n: ^b" + var + "(" + value + ")^n must be less than or equal than the total number of ^brounds(" + serverInfo.TotalRounds + ")^n per ^bmap(" + serverInfo.Map.ToLower() + ")^n^0");
+                    return false;
+                }
+            }
+
+            if (var.CompareTo("live_interval_time") == 0) {
+                if (!intAssertGT(var, value, 0))
+                    return false;
+            }
+
+            if (var.CompareTo("debug_level") == 0) {
+                if (!intAssertGTE(var, value, 0))
+                    return false;
+            }
+
+            return true;
+        }
+
+        #region Needless Assert Wrappers
+
+        public bool strAssertSort(string value) {
+            if (value == null)
+                return false;
+
+
+            List<String> sort_methods = getAllowedSorts();
+
+            if (!sort_methods.Contains(value)) {
+                SendConsoleMessage("^1^bERROR^0^n: ^b" + value + "^n is not a valid sort method ^0");
+                SendConsoleMessage("valid sort methods are: ^b" + String.Join("^0,^b ", sort_methods.ToArray()) + "^0");
+                return false;
+            }
+            return true;
+        }
+
+        private bool intAssertLT(string var, int value, int max_value) {
+            if (!(value < max_value)) {
+                SendConsoleMessage("^1^bERROR^0^n: b" + var + "(" + value + ")^n must be less than  ^b" + max_value + "^n^0");
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool intAssertLTE(string var, int value, int max_value) {
+            if (!(value <= max_value)) {
+                SendConsoleMessage("^1^bERROR^0^n: ^b" + var + "(" + value + ")^n must be less than or equal to ^b" + max_value + "^n^0");
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool intAssertGT(string var, int value, int min_value) {
+            if (!(value > min_value)) {
+                SendConsoleMessage("^1^bERROR^0^n: ^b" + var + "(" + value + ")^n must be greater than  ^b" + min_value + "^n^0");
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool intAssertGTE(string var, int value, int min_value) {
+            if (!(value >= min_value)) {
+                SendConsoleMessage("^1^bERROR^0^n: ^b" + var + "(" + value + ")^n must be greater than or equal to ^b" + min_value + "^n^0");
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool intAssertGTE(string var1, int var1_value, string var2) {
+            int var2_value = getIntegerVarValue(var2);
+
+            if (!(var1_value >= var2_value)) {
+
+                SendConsoleMessage("^1^bERROR^0^n: ^b" + var1 + "(" + var1_value + ")^n must be greater than or equal to the value of ^b" + var2 + "(" + var2_value + ")^n");
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool intAssertLTE(string var1, int var1_value, string var2) {
+            int var2_value = getIntegerVarValue(var2);
+
+
+            if (!(var1_value <= var2_value)) {
+                SendConsoleMessage("^1^bERROR^0^n: ^b" + var1 + "(" + var1_value + ")^n must be less than or equal to the value of ^b" + var2 + "(" + var2_value + ")^n");
+                return false;
+            }
+
+            return true;
+        }
+        #endregion
+
+        #endregion
+
+        #region Bullshit
         private List<PlayerProfile> removePlayers(List<PlayerProfile> player_list, int max_size) {
             if (players == null || players.Count == 0) {
                 DebugWrite("^1^bWARNING^0^n: cannot make a squad without any players", 1);
@@ -5315,129 +6894,9 @@ namespace PRoConEvents {
 
             }
         }
-        #endregion
 
-        #endregion
-
-
-
-
-        public Dictionary<int, int> getPlayerCount() {
-
-            /* initialize hash with player count for 16 teams*/
-            Dictionary<int, int> player_count = new Dictionary<int, int>();
-            for (int i = 0; i < 16; i++)
-                player_count[i] = 0;
-
-            List<PlayerProfile> player_list = getPlayersProfile("");
-
-            foreach (PlayerProfile player in player_list)
-                player_count[player.getTeamId()]++;
-
-
-            return player_count;
-        }
-
-        private List<PlayerProfile> getNoSquadPlayers(int teamId) {
-            Dictionary<int, PlayerSquad> squads = getSquads(teamId);
-            /* return the members of the no-squad */
-            return squads[0].getMembers();
-        }
-
-
-        private List<PlayerSquad> getAllSquads(int teamId) {
-            Dictionary<int, PlayerSquad> squads = getSquads(teamId);
-
-            /* remove the no-squad */
-            squads.Remove(0);
-
-            List<PlayerSquad> list = new List<PlayerSquad>();
-            foreach (KeyValuePair<int, PlayerSquad> pair in squads)
-                list.Add(pair.Value);
-
-            return list;
-        }
-
-        private List<PlayerSquad> getNonEmptySquads(int teamId) {
-            Dictionary<int, PlayerSquad> squads = getSquads(teamId);
-
-            /* remove the no-squad */
-            squads.Remove(0);
-
-            /* get only the non-empty squads */
-            List<PlayerSquad> list = new List<PlayerSquad>();
-            foreach (KeyValuePair<int, PlayerSquad> pair in squads)
-                if (pair.Value.getCount() > 0)
-                    list.Add(pair.Value);
-
-            return list;
-        }
-
-        private void listSquad(PlayerSquad sq) {
-            List<PlayerProfile> members = sq.getMembers();
-
-            DebugWrite("Team(^b" + TN(sq.getTeamId()) + "^n).Squad(^b" + SQN(sq.getSquadId()) + "^n): " + sq.getCount() + " players", 3);
-            int count = 1;
-            foreach (PlayerProfile pp in members)
-                DebugWrite("    " + count++ + ".  ^b" + pp + "^n", 3);
-        }
-
-        private void listSquads(List<PlayerSquad> sqs) {
-            foreach (PlayerSquad sq in sqs)
-                listSquad(sq);
-        }
-
-        private Dictionary<int, PlayerSquad> getSquads(int teamId) {
-            int num_squads = 8;
-            if (teamId == 0)
-                num_squads = 16;
-
-            List<PlayerProfile> player_list = getPlayersProfile("");
-
-            Dictionary<int, PlayerSquad> squads = new Dictionary<int, PlayerSquad>();
-            for (int i = 0; i <= num_squads; i++)
-                squads[i] = new PlayerSquad(teamId, i);
-
-            foreach (PlayerProfile player in player_list) {
-                if (player.getTeamId() == teamId && squads.ContainsKey(player.getSquadId()))
-                    squads[player.getSquadId()].addPlayer(player);
-            }
-
-            return squads;
-        }
-
-        private bool isTimeLeft(int remain_time, int msg_display_time, int msg_interval_time, int countdown_time) {
-            return (remain_time % msg_interval_time) == 0 && (remain_time - msg_display_time) >= countdown_time;
-        }
-
-
-        private bool isInGameCommand(string str)
+        public int getGroupOrder(String name)
         {
-            if (Regex.Match(str, @"^\s*[@/!]").Success)
-                return true;
-
-            return false;
-        }
-
-        public void ConsoleWrite(string msg) {
-            string prefix = "[^b" + GetPluginName() + "^n] ";
-            this.ExecuteCommand("procon.protected.pluginconsole.write", prefix + msg);
-        }
-
-        public void DebugWrite(string msg, int level) {
-            if (getIntegerVarValue("debug_level") >= level)
-                ConsoleWrite(msg);
-        }
-
-        public String getPluginVariableGroup(String name) {
-            foreach (KeyValuePair<String, List<String>> group_pair in settings_group)
-                if (group_pair.Value.Contains(name))
-                    return group_pair.Key;
-
-            return "Settings";
-        }
-
-        public int getGroupOrder(String name) {
             //if (settings_group_order.ContainsKey(name))
             //    return settings_group_order[name];
 
@@ -5450,7 +6909,8 @@ namespace PRoConEvents {
             for (int i = 0; i <= reverse.Count; i++)
                 if (!reverse.ContainsKey(i))
                     continue;
-                else {
+                else
+                {
                     if (shouldSkipGroup(reverse[i]))
                         continue;
                     offset++;
@@ -5462,7 +6922,8 @@ namespace PRoConEvents {
             return offset;
         }
 
-        public bool shouldSkipGroup(String name) {
+        public bool shouldSkipGroup(String name)
+        {
 
             if ((name.Equals("Round Balancer") || name.Equals("Round Interval")) && !getBooleanVarValue("balance_round"))
                 return true;
@@ -5477,7 +6938,8 @@ namespace PRoConEvents {
 
         }
 
-        public bool shouldSkipVariable(String name) {
+        public bool shouldSkipVariable(String name)
+        {
 
             if (Regex.Match(name, @"^(?:player|clan)_(?:move|kick)_wlist").Success && !getBooleanVarValue("use_extra_white_lists"))
                 return true;
@@ -5489,51 +6951,8 @@ namespace PRoConEvents {
 
         }
 
-        //Lists all of the plugin variables.
-
-        private void enforceDelayedMove(PlayerProfile vp) {
-
-            int dtid = vp.getDelayedTeamId();
-            int dsid = vp.getDelayedSquadId();
-
-            vp.resetDelayedTeamSquad();
-
-            /* if player is already in the delayed team, ignore him */
-            if (dtid == vp.getTeamId()) {
-                DebugWrite("Player " + vp + " is already in to ^bDTeam(" + TN(dtid) + ")^n, will skip", 3);
-                return;
-            }
-
-            /* if teams are already balanced, ignore this player */
-            DebugWrite("I will now re-check if teams are balanced", 3);
-            if (teamsBalanced()) {
-                DebugWrite("Teams are balanced, will not move player " + vp, 3);
-                return;
-            } else {
-                /* if teams are not balanced we still have to check direction of inbalancing because of possible manual move or standart balancer work! */
-                Dictionary<int, int> player_count = getPlayerCount();
-
-                int team_sz = serverInfo.MaxPlayerCount / 2;
-                int bigger_team = (player_count[1] > player_count[2]) ? 1 : 2;
-                int smaller_team = (player_count[1] > player_count[2]) ? 2 : 1;
-
-                if (bigger_team == dtid) {
-                    DebugWrite("Teams are unbalanced, but in other direction that was marked for this player. Will not move player " + vp, 3);
-                    return;
-                }
-
-            }
-
-            DebugWrite("Moving player " + vp + " from ^bTeam(" + TN(vp.getTeamId()) + ").Squad(" + SQN(vp.getSquadId()) + ")^n to ^bDTeam(" + TN(dtid) + ").DSquad(" + SQN(dsid) + ")^n", 3);
-            movePlayer(vp, dtid, dsid);
-
-        }
-
-
-        /// <summary>
-        /// Empty method body.
-        /// </summary>
-        public void battleLogConnect() {
+        public void battleLogConnect()
+        {
             /*
             if (!blog.isReady())
             {
@@ -5549,1276 +6968,8 @@ namespace PRoConEvents {
         }
 
 
-        public void processNewPlayer(CPunkbusterInfo cpbiPlayer) {
-            if (this.players.ContainsKey(cpbiPlayer.SoldierName))
-                this.players[cpbiPlayer.SoldierName].pbinfo = cpbiPlayer;
-            else {
-                lock (mutex) {
+        #endregion
 
-                    // add new player to the queue, and wake the stats fetching loop
-                    if (!(new_player_queue.ContainsKey(cpbiPlayer.SoldierName) ||
-                          players.ContainsKey(cpbiPlayer.SoldierName) ||
-                          new_players_batch.ContainsKey(cpbiPlayer.SoldierName))) {
-                        DebugWrite("Queueing ^b" + cpbiPlayer.SoldierName + "^n for stats fetching", 1);
-                        new_player_queue.Add(cpbiPlayer.SoldierName, cpbiPlayer);
-                        wake_handle.Set();
-                    }
-
-                }
-            }
-        }
-
-
-        public int getPerMapInterval() {
-
-            String key = getPerMapKey();
-
-            if (key.Length > 0)
-                return getIntegerVarValue(key);
-
-            return 0;
-        }
-
-        public String getPerMapKey() {
-            string mode = serverInfo.GameMode.ToLower().Trim();
-            string map = serverInfo.Map.ToLower().Trim();
-
-            if (maps.ContainsKey(map) && modes.ContainsKey(mode))
-                return modes[mode] + "_" + maps[map];
-
-            return "";
-        }
-
-        public bool checkRoundBalance() {
-            int round_interval = this.getIntegerVarValue("round_interval");
-            int round_total = serverInfo.TotalRounds;
-            int round_current = serverInfo.CurrentRound + 1;
-            string map = serverInfo.Map.ToLower();
-
-            int per_map_interval = getPerMapInterval();
-
-            /* if user set a value per-map, use that instead */
-            if (per_map_interval > 0) {
-                DebugWrite("Using round_interval value of " + per_map_interval + " for map " + getPerMapKey(), 1);
-                round_interval = per_map_interval;
-            }
-
-            if (round_interval > round_total) {
-                DebugWrite("^1^bWARNING^0^n: ^bround_interval(" + round_interval + ")^n is greater than total ^brounds(" + round_total + ")^n for ^bmap(" + map + ")^n^0", 1);
-                DebugWrite("setting ^bround_interval^n to ^b" + round_total + "^n internally for ^bmap(" + map + ")^n^0", 1);
-                round_interval = round_total;
-            }
-
-
-            DebugWrite("End of round detected", 1);
-            DebugWrite("Current round is ^b" + round_current + "^n/^b" + round_total + "^n,", 1);
-            DebugWrite("Round balance interval is ^b" + round_interval + "^n^0", 1);
-
-            if (!getBooleanVarValue("balance_round"))
-                return false;
-
-            if (round_current % round_interval == 0)
-                return true;
-
-            return false;
-        }
-
-
-        public static string TN(int teamNo) {
-
-            switch (teamNo) {
-                case 0:
-                    return "Neutral";
-                case 1:
-                    return "US";
-                case 2:
-                    return "RU";
-                default:
-                    return "Unknown";
-            }
-        }
-
-
-        public static string SQN(int squadNo) {
-
-            switch (squadNo) {
-                case 0:
-                    return "Neutral";
-                case 1:
-                    return "Alpha";
-                case 2:
-                    return "Bravo";
-                case 3:
-                    return "Charlie";
-                case 4:
-                    return "Delta";
-                case 5:
-                    return "Echo";
-                case 6:
-                    return "Foxtrot";
-                case 7:
-                    return "Golf";
-                case 8:
-                    return "Hotel";
-                case 9:
-                    return "India";
-                case 10:
-                    return "Juliet";
-                case 11:
-                    return "Kilo";
-                case 12:
-                    return "Lima";
-                case 13:
-                    return "Mike";
-                case 14:
-                    return "November";
-                case 15:
-                    return "Oscar";
-                case 16:
-                    return "Papa";
-                case 17:
-                    return "X-Alpha";
-                case 18:
-                    return "X-Bravo";
-                case 19:
-                    return "X-Charlie";
-                case 20:
-                    return "X-Delta";
-                case 21:
-                    return "X-Echo";
-                case 22:
-                    return "X-Foxtrot";
-                case 23:
-                    return "X-Golf";
-                case 24:
-                    return "X-Hotel";
-                case 25:
-                    return "X-India";
-                case 26:
-                    return "X-Juliet";
-                case 27:
-                    return "X-Kilo";
-                case 28:
-                    return "X-Lima";
-                case 29:
-                    return "X-Mike";
-                case 30:
-                    return "X-November";
-                case 31:
-                    return "X-Oscar";
-                case 32:
-                    return "X-Papa";
-
-                default:
-                    if (squadNo > 16 && squadNo <= 32)
-                        return "S-" + squadNo;
-                    else
-                        return "Unknown";
-            }
-        }
-
-        public double getRoundMinutes() {
-            return utc.Subtract(startRoundTime).TotalMinutes;
-        }
-
-        private void resetPlayerStats() {
-
-            List<PlayerProfile> players_list = getPlayersProfile("");
-            foreach (PlayerProfile player in players_list) {
-                player.resetStats();
-            }
-
-            /* reset the fail-safe counter */
-            max_player_count = 0;
-
-        }
-
-        private void SendPlayerMessage(string soldierName, string message) {
-            if (getBooleanVarValue("quiet_mode") && !isAdmin(soldierName))
-                return;
-
-            if (soldierName == null)
-                return;
-
-            /* Temporarily disable player messages until DICE 
-             * enables individual player messages
-             */
-
-            ExecCommand("admin.say", message, "player", soldierName);
-        }
-
-        private void SendGlobalMessage(string message) {
-            if (getBooleanVarValue("quiet_mode"))
-                SendConsoleMessage(message);
-            else
-                ExecCommand("admin.say", message, "all");
-
-        }
-
-        private void SendConsoleMessage(string name, string msg) {
-            List<string> admin_list = getAdminList();
-
-            DebugWrite(msg, 1);
-            msg = Regex.Replace(msg, @"\^[0-9a-zA-Z]", "");
-
-            if (name != null)
-                SendPlayerMessage(name, msg);
-
-
-        }
-
-        private void SendConsoleMessage(string msg) {
-            List<string> admin_list = getAdminList();
-            DebugWrite(msg, 1);
-
-            msg = Regex.Replace(msg, @"\^[0-9a-zA-Z]", "");
-
-
-
-            foreach (string name in admin_list) {
-                PlayerProfile pp = this.getPlayerProfile(name);
-                if (pp != null) {
-                    SendPlayerMessage(pp.name, msg);
-                }
-            }
-
-        }
-
-        private void initializeBalancer() {
-            getServerInfo();
-            startStopState(utc);
-
-            // initialize the stats fetching thread
-            this.wake_handle = new EventWaitHandle(false, EventResetMode.ManualReset);
-            this.stats_fetching_thread = new Thread(new ThreadStart(stats_fetching_loop));
-            stats_fetching_thread.Start();
-
-        }
-
-        private void startWaitState(DateTime now) {
-            startWaitState(null, now);
-        }
-
-        private void startWarnState(DateTime now) {
-            startWarnState(null, now);
-        }
-
-        private void startWarnState(string sender, DateTime now) {
-            if (!isPluginChecking()) {
-                SendConsoleMessage(sender, "plugin is in " + pluginState.ToString() + " state");
-                return;
-            }
-
-            pluginState = PluginState.warn;
-            setStartTime(pluginState, now.AddSeconds(1));
-
-            DebugWrite("^b" + pluginState + "^n state started " + getStartTime(pluginState).ToString(), 1);
-        }
-
-        private void startWaitState(string sender, DateTime now) {
-
-            if (!isPluginStopped()) {
-                SendConsoleMessage(sender, "cannot start while balancer is in " + pluginState.ToString() + " state");
-                return;
-            }
-
-            if (sender != null)
-                setPluginVarValue("auto_start", "true");
-
-
-            pluginState = PluginState.wait;
-            setStartTime(pluginState, now.AddSeconds(1));
-
-
-            SendConsoleMessage(sender, "^b" + pluginState + "^n state started " + getStartTime(pluginState).ToString());
-        }
-
-        private void startStopState(DateTime now) {
-            startStopState(null, now);
-        }
-
-        private void startStopState(string sender, DateTime now) {
-            virtual_mode = false;
-            round_balancer = false;
-            level_started = false;
-            check_state_phase = 0;
-
-            if (sender != null)
-                setPluginVarValue("auto_start", "false");
-
-            pluginState = PluginState.stop;
-            setStartTime(pluginState, now.AddSeconds(1));
-
-            SendConsoleMessage(sender, "^b" + pluginState + "^n state started " + getStartTime(pluginState).ToString());
-        }
-
-        public void balanceLiveCmd(string sender, DateTime now) {
-
-            balanceLive(now);
-            restartWaitState(now);
-        }
-
-        public void balanceRoundCmd(string sender, DateTime now) {
-            try {
-                balanceRound(1);
-                restartWaitState(utc);
-                resetPlayerStats();
-            } catch (Exception e) {
-                dump_exception(e);
-            }
-
-        }
-
-        private bool isPlayerIdle(PlayerProfile player) {
-            int last_kill_time = getIntegerVarValue("last_kill_time");
-            int last_death_time = getIntegerVarValue("last_death_time");
-            int last_chat_time = getIntegerVarValue("last_chat_time");
-            int last_spawn_time = getIntegerVarValue("last_spawn_time");
-            int last_score_time = getIntegerVarValue("last_score_time");
-
-
-            if (player.getLastKill() > last_kill_time &&
-                player.getLastDeath() > last_death_time &&
-                player.getLastChat() > last_chat_time &&
-                player.getLastSpawn() > last_spawn_time &&
-                player.getLastScore() > last_score_time)
-                return true;
-
-            return false;
-
-        }
-
-        public void showIdlePlayers(string sender) {
-            List<PlayerProfile> players_list = getPlayersProfile("");
-
-            List<PlayerProfile> list = new List<PlayerProfile>();
-
-            foreach (PlayerProfile player in players_list)
-                if (isPlayerIdle(player))
-                    list.Add(player);
-
-
-            SendConsoleMessage(sender, " == " + list.Count + " idle players (watching for last " + Math.Round(getRoundMinutes(), 2) + " minutes)  ==");
-            foreach (PlayerProfile player in list)
-                SendConsoleMessage(sender, player + ": " + player.getIdleStatistics());
-        }
-
-        public void wlistInfoPlayer(string sender, string pname) {
-
-            PlayerProfile player = getPlayerProfile(pname);
-            if (player == null) {
-                SendConsoleMessage(sender, "^1^bWARNING^n^0: could not find ^b" + pname + "^n in game");
-                return;
-            }
-
-            SendConsoleMessage(sender, " == White List Info for " + pname + "  ==");
-
-            List<String> list_names = new List<string>();
-            list_names.Add("player_move_wlist");
-            list_names.Add("clan_move_wlist");
-            list_names.Add("player_safe_wlist");
-            list_names.Add("clan_move_wlist");
-            list_names.Add("player_safe_wlist");
-            list_names.Add("clan_safe_wlist");
-
-            foreach (String list in list_names) {
-                Boolean inlist = isPlayerInWhiteList(player, list);
-                String inlist_str = (inlist) ? "^b" + inlist.ToString() + "^n" : inlist.ToString();
-                SendConsoleMessage(sender, list + " = " + inlist_str);
-            }
-
-        }
-
-        public void showPlayerRoundStatsCmd(string sender, string player_name) {
-            List<PlayerProfile> players_list;
-            if (player_name == null)
-                players_list = getPlayersProfile("");
-            else
-                players_list = getPlayersProfile(player_name);
-
-
-            if (players_list.Count == 0)
-                return;
-
-            int i = 1;
-            SendConsoleMessage(sender, " == Round Statistics ( " + Math.Round(getRoundMinutes(), 2) + " minutes) ==");
-            foreach (PlayerProfile player in players_list) {
-                SendConsoleMessage(sender, i + ". " + player + ": " + player.getRoundStatistics());
-                i++;
-            }
-        }
-
-        public void showPlayerOnlineStatsCmd(string sender, string player_name) {
-            List<PlayerProfile> players_list;
-            if (player_name == null)
-                players_list = getPlayersProfile("");
-            else
-                players_list = getPlayersProfile(player_name);
-
-
-            if (players_list.Count == 0)
-                return;
-
-            int i = 1;
-
-            SendConsoleMessage(sender, " == Online Statistics ==");
-            foreach (PlayerProfile player in players_list) {
-                SendConsoleMessage(sender, i + ". " + player + ": " + player.getOnlineStatistics());
-                i++;
-            }
-        }
-
-        private void startBalancerCmd(string sender, DateTime now) {
-            setBooleanVarValue("balance_live", true);
-            startWaitState(now);
-        }
-
-        private void stopBalancerCmd(string sender, DateTime now) {
-            setBooleanVarValue("balance_live", false);
-            startStopState(now);
-        }
-
-        private void restartWaitState(DateTime now) {
-            pluginState = PluginState.wait;
-            setStartTime(pluginState, now.AddSeconds(1));
-            DebugWrite("^b" + pluginState.ToString() + "^n state re-started " + getStartTime(pluginState).ToString() + "^0", 1);
-        }
-
-        private void genericSayAnnounce(List<string> messages) {
-            if (messages.Count == 0)
-                return;
-
-            int remain_time = getRemainingTime(utc, pluginState);
-
-            for (int i = 0; i < messages.Count; i++) {
-                string msg = messages[i];
-                msg = msg.Replace("%time%", remain_time.ToString());
-                SendGlobalMessage(msg);
-            }
-
-        }
-
-        private void warnAnnounce(int display_time) {
-            if (!isPluginWarning())
-                return;
-
-            DebugWrite("sending ^b" + pluginState.ToString() + "^n announcement", 1);
-
-            List<string> msg = new List<string>();
-            msg.Add("Teams are unbalanced");
-            msg.Add("Autobalancer starts in %time% secs");
-
-            if (getBooleanVarValue("warn_say"))
-                genericSayAnnounce(msg);
-        }
-
-        private void warnCountdown() {
-            if (!isPluginWarning())
-                return;
-
-            DebugWrite("sending ^b" + pluginState.ToString() + "^n countdown", 1);
-
-            int remain_time = getRemainingTime(utc, PluginState.warn);
-            string msg = "Autobalancer starts in " + remain_time.ToString() + "!";
-
-            if (getBooleanVarValue("warn_say"))
-                SendGlobalMessage(msg);
-        }
-
-        private void enableVarGroupCmd(string sender, string group) {
-            if (group.CompareTo("plugin") == 0) {
-                DebugWrite("Disabling plugin", 1);
-                this.ExecuteCommand("procon.plugin.enable", "InsaneBalancer", "false");
-            }
-            enablePluginVarGroup(sender, group);
-        }
-
-        private void disableVarGroupCmd(string sender, string group) {
-            if (group.CompareTo("plugin") == 0) {
-                DebugWrite("Enabling plugin", 1);
-                this.ExecuteCommand("procon.plugin.enable", "InsaneBalancer", "true");
-            }
-
-            disablePluginVarGroup(sender, group);
-        }
-
-        private bool setPluginVarGroup(string sender, string group, string val) {
-            String msg = "";
-            if (group == null) {
-                msg = "no variables to enable";
-                DebugWrite(msg, 1);
-                SendConsoleMessage(sender, msg);
-                return false;
-            }
-
-
-            group = group.Replace(";", ",");
-            List<string> vars = new List<string>(Regex.Split(group, @"\s*,\s*", RegexOptions.IgnoreCase));
-            foreach (string var in vars) {
-                if (setPluginVarValue(sender, var, val)) {
-                    msg = var + " set to \"" + val + "\"";
-                    SendConsoleMessage(sender, msg);
-                }
-
-            }
-            return true;
-        }
-
-        private bool enablePluginVarGroup(string sender, string group) {
-            //search for all variables matching
-            List<string> vars = getVariableNames(group);
-            String msg = "";
-            if (vars.Count == 0) {
-                msg = "no variables match \"" + group + "\"";
-                //ConsoleWrite(msg);
-                SendConsoleMessage(sender, msg);
-                return false;
-            }
-
-            return setPluginVarGroup(sender, String.Join(",", vars.ToArray()), "true");
-        }
-
-        private List<string> getVariableNames(string group) {
-            List<string> names = new List<string>();
-            List<string> list = new List<string>(Regex.Split(group, @"\s*,\s*"));
-            List<string> vars = getPluginVars();
-            foreach (string search in list) {
-                foreach (string var in vars) {
-                    if (var.Contains(search))
-                        if (!names.Contains(var))
-                            names.Add(var);
-                }
-            }
-
-            return names;
-        }
-
-        private bool disablePluginVarGroup(string sender, string group) {
-            //search for all variables matching
-            List<string> vars = getVariableNames(group);
-
-            if (vars.Count == 0) {
-                SendConsoleMessage(sender, "no variables match \"" + group + "\"");
-                return false;
-            }
-            return setPluginVarGroup(sender, String.Join(",", vars.ToArray()), "false");
-        }
-
-        private void getVariableCmd(string sender, string var) {
-            string val = getPluginVarValue(sender, var);
-
-            if (var.Equals("pass"))
-                val = Regex.Replace(val, @".", "*");
-
-            String msg = var + " = " + val;
-
-            //ConsoleWrite(msg);
-            SendConsoleMessage(sender, msg);
-        }
-
-        private void setVariableCmd(string sender, string var, string val) {
-
-            if (setPluginVarValue(sender, var, val)) {
-                SendConsoleMessage(sender, var + " set to \"" + val + "\"");
-            }
-        }
-
-        private void pluginSettingsCmd(string sender) {
-            SendConsoleMessage(sender, " == Insane Balancer Settings == ");
-            foreach (string var in getPluginVars()) {
-                SendConsoleMessage(sender, var + " = " + getPluginVarValue(sender, var));
-            }
-        }
-
-        public bool stringValidator(string var, string value) {
-            if (var.CompareTo("round_sort") == 0) {
-                if (!strAssertSort(value))
-                    return false;
-            }
-            if (var.CompareTo("live_sort") == 0) {
-                if (!strAssertSort(value))
-                    return false;
-            }
-            return true;
-        }
-
-        public bool commandValidator(string var, string value) {
-
-            try {
-                inGameCommand(value);
-            } catch (Exception e) {
-                dump_exception(e);
-            }
-            return false;
-        }
-
-        public List<String> getAllowedSorts() {
-            List<string> sort_methods = new List<string>();
-
-
-            sort_methods.Add("kdr_asc_round");
-            sort_methods.Add("kdr_desc_round");
-            sort_methods.Add("spm_asc_round");
-            sort_methods.Add("spm_desc_round");
-            sort_methods.Add("kpm_asc_round");
-            sort_methods.Add("kpm_desc_round");
-            sort_methods.Add("score_asc_round");
-            sort_methods.Add("score_desc_round");
-            sort_methods.Add("time_asc_round");
-            sort_methods.Add("time_desc_round");
-
-
-            sort_methods.Add("kdr_asc_online");
-            sort_methods.Add("kdr_desc_online");
-            sort_methods.Add("kpm_asc_online");
-            sort_methods.Add("kpm_desc_online");
-            sort_methods.Add("spm_asc_online");
-            sort_methods.Add("spm_desc_online");
-            sort_methods.Add("kills_asc_online");
-            sort_methods.Add("kills_desc_online");
-            sort_methods.Add("deaths_asc_online");
-            sort_methods.Add("deaths_desc_online");
-            sort_methods.Add("skill_asc_online");
-            sort_methods.Add("skill_desc_online");
-            sort_methods.Add("quits_asc_online");
-            sort_methods.Add("quits_desc_online");
-            sort_methods.Add("accuracy_asc_online");
-            sort_methods.Add("accuracy_desc_online");
-            sort_methods.Add("score_asc_online");
-            sort_methods.Add("score_desc_online");
-            sort_methods.Add("rank_asc_online");
-            sort_methods.Add("rank_desc_online");
-
-            sort_methods.Add("random_value");
-
-            return sort_methods;
-        }
-
-        public bool strAssertSort(string value) {
-            if (value == null)
-                return false;
-
-
-            List<String> sort_methods = getAllowedSorts();
-
-            if (!sort_methods.Contains(value)) {
-                SendConsoleMessage("^1^bERROR^0^n: ^b" + value + "^n is not a valid sort method ^0");
-                SendConsoleMessage("valid sort methods are: ^b" + String.Join("^0,^b ", sort_methods.ToArray()) + "^0");
-                return false;
-            }
-            return true;
-        }
-
-        public bool booleanValidator(string var, bool value) {
-            return true;
-        }
-
-
-        /// <summary>
-        /// Ridiculously complicated way to validate that particular variables are valid.
-        /// </summary>
-        public bool integerValidator(string var, int value) {
-
-            if (var.CompareTo("warn_msg_interval_time") == 0) {
-                if (!intAssertGTE(var, value, 0) ||
-                    !intAssertLTE(var, value, "warn_msg_total_time"))
-                    return false;
-            }
-
-            if (var.CompareTo("warn_msg_countdown_time") == 0) {
-                if (!intAssertGTE(var, value, 0) ||
-                    !intAssertLTE(var, value, "warn_msg_total_time"))
-                    return false;
-            }
-
-            if (var.CompareTo("warn_msg_total_time") == 0) {
-                if (!intAssertGTE(var, value, 0) ||
-                    !intAssertGTE(var, value, "warn_msg_interval_time") ||
-                    !intAssertGTE(var, value, "warn_msg_countdown_time"))
-                    return false;
-            }
-
-            if (var.CompareTo("warn_msg_display_time") == 0) {
-                if (!intAssertGTE(var, value, 0) ||
-                    !intAssertLTE(var, value, "warn_msg_total_time"))
-                    return false;
-            }
-
-            if (var.CompareTo("balance_threshold") == 0 ||
-                var.CompareTo("wait_death_count") == 0) {
-                if (!intAssertGT(var, value, 0))
-                    return false;
-            }
-
-            if (var.CompareTo("round_interval") == 0) {
-
-                if (!intAssertGT(var, value, 0))
-                    return false;
-
-                if (serverInfo == null)
-                    return true;
-
-                if (value > serverInfo.TotalRounds) {
-                    SendConsoleMessage("^1^bERROR^0^n: ^b" + var + "(" + value + ")^n must be less than or equal than the total number of ^brounds(" + serverInfo.TotalRounds + ")^n per ^bmap(" + serverInfo.Map.ToLower() + ")^n^0");
-                    return false;
-                }
-            }
-
-            if (var.CompareTo("live_interval_time") == 0) {
-                if (!intAssertGT(var, value, 0))
-                    return false;
-            }
-
-            if (var.CompareTo("debug_level") == 0) {
-                if (!intAssertGTE(var, value, 0))
-                    return false;
-            }
-
-            return true;
-        }
-
-        private bool intAssertLT(string var, int value, int max_value) {
-            if (!(value < max_value)) {
-                SendConsoleMessage("^1^bERROR^0^n: b" + var + "(" + value + ")^n must be less than  ^b" + max_value + "^n^0");
-                return false;
-            }
-
-            return true;
-        }
-
-        private bool intAssertLTE(string var, int value, int max_value) {
-            if (!(value <= max_value)) {
-                SendConsoleMessage("^1^bERROR^0^n: ^b" + var + "(" + value + ")^n must be less than or equal to ^b" + max_value + "^n^0");
-                return false;
-            }
-
-            return true;
-        }
-
-        private bool intAssertGT(string var, int value, int min_value) {
-            if (!(value > min_value)) {
-                SendConsoleMessage("^1^bERROR^0^n: ^b" + var + "(" + value + ")^n must be greater than  ^b" + min_value + "^n^0");
-                return false;
-            }
-
-            return true;
-        }
-
-        private bool intAssertGTE(string var, int value, int min_value) {
-            if (!(value >= min_value)) {
-                SendConsoleMessage("^1^bERROR^0^n: ^b" + var + "(" + value + ")^n must be greater than or equal to ^b" + min_value + "^n^0");
-                return false;
-            }
-
-            return true;
-        }
-
-        private bool intAssertGTE(string var1, int var1_value, string var2) {
-            int var2_value = getIntegerVarValue(var2);
-
-            if (!(var1_value >= var2_value)) {
-
-                SendConsoleMessage("^1^bERROR^0^n: ^b" + var1 + "(" + var1_value + ")^n must be greater than or equal to the value of ^b" + var2 + "(" + var2_value + ")^n");
-
-                return false;
-            }
-
-            return true;
-        }
-
-        private bool intAssertLTE(string var1, int var1_value, string var2) {
-            int var2_value = getIntegerVarValue(var2);
-
-
-            if (!(var1_value <= var2_value)) {
-                SendConsoleMessage("^1^bERROR^0^n: ^b" + var1 + "(" + var1_value + ")^n must be less than or equal to the value of ^b" + var2 + "(" + var2_value + ")^n");
-                return false;
-            }
-
-            return true;
-        }
-
-        private bool setPluginVarValue(string var, string val) {
-            return setPluginVarValue(null, var, val);
-        }
-
-        private bool setPluginVarValue(string sender, string var, string val) {
-            if (var == null || val == null)
-                return false;
-
-            if (!getPluginVars().Contains(var)) {
-                SendConsoleMessage(sender, "Insane Balancer: unknown variable \"" + var + "\"");
-                return false;
-            }
-
-            /* Parse Boolean Values */
-            bool booleanValue = false;
-            bool isBooleanValue = true;
-            if (Regex.Match(val, @"\s*(1|true|yes)\s*", RegexOptions.IgnoreCase).Success)
-                booleanValue = true;
-            else if (Regex.Match(val, @"\s*(0|false|no)\s*", RegexOptions.IgnoreCase).Success)
-                booleanValue = false;
-            else
-                isBooleanValue = false;
-
-
-            /* Parse Integer Values */
-            int integerValue = 0;
-            //bool isIntegerValue = int.TryParse(val, out integerValue) && integerValue >= 0;
-            bool isIntegerValue = int.TryParse(val, out integerValue);
-
-            /* Parse Float Values */
-            float floatValue = 0F;
-            bool isFloatValue = float.TryParse(val, out floatValue) && floatValue >= 0F;
-
-            /* Parse String List */
-            List<string> stringListValue = new List<string>(Regex.Split(val.Replace(";", ",").Replace("|", ","), @"\s*,\s*"));
-            bool isStringList = true;
-
-            /* Parse String var */
-            string stringValue = val;
-            bool isStringValue = (val != null);
-
-
-            if (isBooleanVar(var)) {
-                if (!isBooleanValue) {
-                    SendConsoleMessage(sender, "\"" + val + "\" is invalid for " + var);
-                    return false;
-                }
-                setBooleanVarValue(var, booleanValue);
-                return true;
-            } else if (isIntegerVar(var)) {
-                if (!isIntegerValue) {
-                    SendConsoleMessage(sender, "\"" + val + "\" is invalid for " + var);
-                    return false;
-                }
-
-                setIntegerVarValue(var, integerValue);
-                return true;
-            } else if (isFloatVar(var)) {
-                if (!isFloatValue) {
-                    SendConsoleMessage(sender, "\"" + val + "\" is invalid for " + var);
-                    return false;
-                }
-
-                setFloatVarValue(var, floatValue);
-                return true;
-            } else if (isStringListVar(var)) {
-                if (!isStringList) {
-                    SendConsoleMessage(sender, "\"" + val + "\"  is invalid for " + var);
-                    return false;
-                }
-
-                setStringListVarValue(var, stringListValue);
-                return true;
-            } else if (isStringVar(var)) {
-                if (!isStringValue) {
-                    SendConsoleMessage(sender, "invalid value for " + var);
-                    return false;
-                }
-
-                setStringVarValue(var, stringValue);
-                return true;
-            } else {
-                SendConsoleMessage(sender, "Insane Balancer: unknown variable \"" + var + "\"");
-                return false;
-            }
-
-        }
-
-        private bool isIntegerVar(string var) {
-            return this.integerVariables.ContainsKey(var);
-        }
-
-        private int getIntegerVarValue(string var) {
-            if (!isIntegerVar(var)) {
-                SendConsoleMessage("unknown variable \"" + var + "\"");
-                return -1;
-            }
-
-            return this.integerVariables[var];
-        }
-
-        private bool setIntegerVarValue(string var, int val) {
-            if (!isIntegerVar(var)) {
-                SendConsoleMessage("unknown variable \"" + var + "\"");
-                return false;
-            }
-
-            if (hasIntegerValidator(var)) {
-                integerVariableValidator validator = integerVarValidators[var];
-                if (validator(var, val) == false)
-                    return false;
-            }
-
-            this.integerVariables[var] = val;
-            return true;
-        }
-
-        private bool hasBooleanValidator(string var) {
-            return booleanVarValidators.ContainsKey(var);
-        }
-
-        private bool hasIntegerValidator(string var) {
-            return integerVarValidators.ContainsKey(var);
-        }
-
-        private bool hasStringValidator(string var) {
-            return stringVarValidators.ContainsKey(var);
-        }
-
-        private bool isStringVar(string var) {
-            return this.stringVariables.ContainsKey(var);
-        }
-
-        private string getStringVarValue(string var) {
-            if (!isStringVar(var)) {
-                SendConsoleMessage("unknown variable \"" + var + "\"");
-                return "";
-            }
-
-            return this.stringVariables[var];
-        }
-
-        private bool setStringVarValue(string var, string val) {
-            if (!isStringVar(var)) {
-                SendConsoleMessage("unknown variable \"" + var + "\"");
-                return false;
-            }
-
-
-            if (hasStringValidator(var)) {
-                stringVariableValidator validator = stringVarValidators[var];
-                if (validator(var, val) == false)
-                    return false;
-            }
-
-
-            string oldval = this.stringVariables[var];
-            this.stringVariables[var] = val;
-
-            return true;
-        }
-
-        private bool isStringListVar(string var) {
-            return this.stringListVariables.ContainsKey(var);
-        }
-
-        private List<string> getStringListVarValue(string var) {
-            if (!isStringListVar(var)) {
-                SendConsoleMessage("unknown variable \"" + var + "\"");
-                return new List<string>();
-            }
-
-            string[] out_list = Regex.Split(this.stringListVariables[var].Replace(";", ",").Replace("|", ","), @"\s*,\s*");
-            return new List<string>(out_list);
-        }
-
-        private bool setStringListVarValue(string var, List<string> val) {
-            if (!isStringListVar(var)) {
-                SendConsoleMessage("unknown variable \"" + var + "\"");
-                return false;
-            }
-
-            List<string> cleanList = new List<string>();
-            foreach (string item in val)
-                if (Regex.Match(item, @"^\s*$").Success)
-                    continue;
-                else
-                    cleanList.Add(item);
-
-            //this.stringListVariables[var] = val;
-            this.stringListVariables[var] = String.Join("|", cleanList.ToArray());
-            return true;
-        }
-
-        private bool isFloatVar(string var) {
-            return this.floatVariables.ContainsKey(var);
-        }
-
-        private float getFloatVarValue(string var) {
-            if (!isFloatVar(var)) {
-                SendConsoleMessage("unknown variable \"" + var + "\"");
-                return -1F;
-            }
-
-            return this.floatVariables[var];
-        }
-
-        private bool setFloatVarValue(string var, float val) {
-            if (!isFloatVar(var)) {
-                SendConsoleMessage("unknown variable \"" + var + "\"");
-                return false;
-            }
-
-            this.floatVariables[var] = val;
-            return true;
-        }
-
-        private bool isBooleanVar(string var) {
-            return this.booleanVariables.ContainsKey(var);
-        }
-
-        private bool getBooleanVarValue(string var) {
-            if (!isBooleanVar(var)) {
-                SendConsoleMessage("unknown variable \"" + var + "\"");
-                return false;
-            }
-
-            return this.booleanVariables[var];
-        }
-
-        private bool setBooleanVarValue(string var, bool val) {
-            if (!isBooleanVar(var)) {
-                SendConsoleMessage("unknown variable \"" + var + "\"");
-                return false;
-            }
-
-            if (hasBooleanValidator(var)) {
-                booleanVariableValidator validator = booleanVarValidators[var];
-                if (validator(var, val) == false)
-                    return false;
-            }
-
-            this.booleanVariables[var] = val;
-            return true;
-        }
-
-        private string getPluginVarValue(string var) {
-            return getPluginVarValue(null, var);
-        }
-
-        private string getPluginVarValue(string sender, string var) {
-            if (!getPluginVars().Contains(var)) {
-                SendConsoleMessage(sender, "Insane Balancer: unknown variable \"" + var + "\"");
-                return "";
-            }
-
-            if (isBooleanVar(var)) {
-                return getBooleanVarValue(var).ToString();
-            } else if (isIntegerVar(var)) {
-                return getIntegerVarValue(var).ToString();
-            } else if (isFloatVar(var)) {
-                return getFloatVarValue(var).ToString();
-            } else if (isStringListVar(var)) {
-                string lst = list2string(getStringListVarValue(var), "");
-                return lst;
-            } else if (isStringVar(var)) {
-                return getStringVarValue(var);
-            } else {
-                SendConsoleMessage(sender, "Insane Balancer: unknown variable \"" + var + "\"");
-                return "";
-            }
-        }
-
-        private List<string> getPluginVars() {
-            return getPluginVars(false);
-        }
-
-        private List<string> getPluginVars(bool hide) {
-            List<string> vars = new List<string>();
-
-
-            vars.AddRange(getBooleanPluginVars());
-            vars.AddRange(getIntegerPluginVars());
-            vars.AddRange(getStringListPluginVars());
-            vars.AddRange(getFloatPluginVars());
-            vars.AddRange(getStringPluginVars());
-
-            if (hide && !getBooleanVarValue("advanced_mode")) {
-                foreach (string hidden_var in hiddenVariables)
-                    vars.Remove(hidden_var);
-            }
-
-            return vars;
-        }
-
-        private List<string> getStringPluginVars() {
-            return new List<string>(this.stringVariables.Keys);
-        }
-
-        private List<string> getStringListPluginVars() {
-            return new List<string>(this.stringListVariables.Keys);
-        }
-
-        private List<string> getIntegerPluginVars() {
-            return new List<string>(this.integerVariables.Keys);
-        }
-
-        private List<string> getFloatPluginVars() {
-            return new List<string>(this.floatVariables.Keys);
-        }
-
-        private List<string> getBooleanPluginVars() {
-            return new List<string>(this.booleanVariables.Keys);
-        }
-
-        public string playerstate2stringED(PlayerState state) {
-            switch (state) {
-                case PlayerState.alive:
-                    return "is alive";
-                case PlayerState.dead:
-                    return "is dead";
-                case PlayerState.kicked:
-                    return "was kicked";
-                case PlayerState.left:
-                    return "left the game";
-                case PlayerState.limbo:
-                    return "is in limbo";
-                default:
-                    return "(%player_state%)";
-            }
-
-        }
-
-        public string list2string(List<string> list, string glue) {
-
-            if (list == null || list.Count == 0)
-                return "";
-            else if (list.Count == 1)
-                return list[0];
-
-            string last = list[list.Count - 1];
-            list.RemoveAt(list.Count - 1);
-
-            string str = "";
-            foreach (string item in list)
-                str += item + ", ";
-
-            return str + glue + last;
-        }
-
-        public string list2string(List<string> list) {
-            return list2string(list, "and ");
-        }
-
-        private List<string> getAdminList() {
-            return getStringListVarValue("admin_list");
-        }
-
-        private bool isAdmin(string soldier) {
-            List<string> admin_list = getAdminList();
-            return admin_list.Contains(soldier);
-        }
-
-        private PlayerProfile getPlayerProfile(CPlayerInfo info) {
-            return getPlayerProfile(info.SoldierName);
-        }
-
-        private PlayerProfile getPlayerProfile(string name) {
-            PlayerProfile pp;
-            this.players.TryGetValue(name, out pp);
-            return pp;
-        }
-
-        public void dump_exception(Exception e) {
-            if (e.GetType().Equals(typeof(ThreadAbortException))) {
-                Thread.ResetAbort();
-                return;
-            }
-
-
-            DebugWrite("^1^bEXCEPTION^0^n: " + e.GetType() + ": " + e.Message, 1);
-            try {
-                string class_name = "InsaneBalancer";
-                // Create a temporary file
-                string path = class_name + ".dump";
-
-
-                DebugWrite("^1Extra information dumped in file " + path, 1);
-                using (FileStream fs = File.Open(path, FileMode.Append)) {
-                    String version = GetPluginVersion();
-                    String trace_str = "\n-----------------------------------------------\n";
-                    trace_str += "Version: " + class_name + " " + version + "\n";
-                    trace_str += "Date: " + DateTime.Now.ToString() + "\n";
-                    trace_str += e.GetType() + ": " + e.Message + "\n\n";
-                    trace_str += "Stack Trace: \n" + e.StackTrace + "\n\n";
-                    trace_str += "MSIL Stack Trace:\n";
-
-                    StackTrace trace = new StackTrace(e);
-                    StackFrame[] frames = trace.GetFrames();
-                    foreach (StackFrame frame in frames)
-                        trace_str += "    " + frame.GetMethod() + ", IL: " + String.Format("0x{0:X}", frame.GetILOffset()) + "\n";
-
-
-                    Byte[] info = new UTF8Encoding(true).GetBytes(trace_str);
-                    fs.Write(info, 0, info.Length);
-                }
-
-
-            } catch (Exception ex) {
-                DebugWrite("^1^bWARNING^0^n: Unable to dump extra exception information.", 1);
-                DebugWrite("^1^bEXCEPTION^0^n:  " + ex.TargetSite + ": " + ex.Message, 1);
-
-            }
-        }
-
-        List<String> scratch_list = new List<string>();
-
-        public void updateQueues(List<CPlayerInfo> lstPlayers) {
-            lock (mutex) {
-                scratch_handle.Reset();
-                // update the scratch list
-                scratch_list.Clear();
-                foreach (CPlayerInfo info in lstPlayers)
-                    if (!scratch_list.Contains(info.SoldierName))
-                        scratch_list.Add(info.SoldierName);
-
-                scratch_handle.Set();
-
-                // make a list of players to drop from the stats queue
-                List<String> players_to_remove = new List<string>();
-                foreach (KeyValuePair<String, CPunkbusterInfo> pair in new_player_queue)
-                    if (!scratch_list.Contains(pair.Key) && !players_to_remove.Contains(pair.Key))
-                        players_to_remove.Add(pair.Key);
-
-                // now actually drop them from the new players queue
-                foreach (String name in players_to_remove)
-                    if (new_player_queue.ContainsKey(name)) {
-                        DebugWrite("Looks like ^b" + name + "^n left the server, removing him from stats queue", 1);
-                        new_player_queue.Remove(name);
-                    }
-
-                // make a list of players to drop from the new players batch
-                players_to_remove.Clear();
-                foreach (KeyValuePair<String, PlayerProfile> pair in new_players_batch)
-                    if (!scratch_list.Contains(pair.Key) && !players_to_remove.Contains(pair.Key))
-                        players_to_remove.Add(pair.Key);
-
-                // now actually drop them from the new players batch
-                foreach (String name in players_to_remove)
-                    if (new_players_batch.ContainsKey(name))
-                        new_players_batch.Remove(name);
-            }
-        }
-
-        public void syncPlayersList(List<CPlayerInfo> lstPlayers) {
-
-            lock (mutex) {
-                // first update the information taht players that still are in list
-                foreach (CPlayerInfo cpiPlayer in lstPlayers)
-                    if (this.players.ContainsKey(cpiPlayer.SoldierName))
-                        this.players[cpiPlayer.SoldierName].updateInfo(cpiPlayer);
-
-                //build a lookup table
-                Dictionary<String, bool> player_lookup = new Dictionary<string, bool>();
-                foreach (CPlayerInfo pinfo in lstPlayers)
-                    if (!player_lookup.ContainsKey(pinfo.SoldierName))
-                        player_lookup.Add(pinfo.SoldierName, true);
-
-
-                List<String> players_to_remove = new List<string>();
-
-                // now make a list of players that will need to be removed
-                foreach (KeyValuePair<String, PlayerProfile> pair in players)
-                    if (!player_lookup.ContainsKey(pair.Key) && !players_to_remove.Contains(pair.Key))
-                        players_to_remove.Add(pair.Key);
-
-                // now actually remove them
-                foreach (String pname in players_to_remove)
-                    if (players.ContainsKey(pname))
-                        players.Remove(pname);
-            }
-        }
+        #endregion
     }
 }
