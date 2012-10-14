@@ -4379,7 +4379,7 @@ namespace PRoConEvents {
         }
 
         private Dictionary<int, PlayerSquad> getSquads(int teamId) {
-            int num_squads = 8;
+            int num_squads = 26;
             if (teamId == 0)
                 num_squads = 16;
 
