@@ -1441,9 +1441,9 @@ namespace PRoConEvents
                          "</blockquote>" +
 
                          "<h3>Section 6 - In-Game Commands</h3>" +
-                         "<h4>Enable !tssquadlist Command</h4>" +
+                         "<h4>Enable !tssquads Command</h4>" +
                          "<blockquote style=\"margin-left: 0px; margin-right:0px; margin-top:0px;\">" +
-                           "Enables a command where !tssquadlist will list teamspeak squads with less than 4 players." +
+                           "Enables a command where !tssquads will list teamspeak squads with less than 4 players." +
                          "</blockquote>" +
 
                          "<h4>Enable !tslobby Command</h4>" +
@@ -1527,7 +1527,7 @@ namespace PRoConEvents
                 lstReturn.Add(new CPluginVariable("Section 5 - User Messages|Message Display Duration",                 typeof(Int32),   msgDuration));
             }
             // -- Section 6 - Debug Information -----------------------------------
-            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tssquadlist",                       typeof(Boolean), mEnableTSSquadList));
+            lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tssquads",                       typeof(Boolean), mEnableTSSquadList));
             lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tslobby",                         typeof(Boolean), mEnableTSStaging));
             lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tsteam",                            typeof(Boolean), mEnableTSTeam));
             lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tsnosync",                          typeof(Boolean), mEnableTSNoSync));
@@ -1584,7 +1584,7 @@ namespace PRoConEvents
             lstReturn.Add(new CPluginVariable("Message",                              typeof(String),  msgMessage));
             lstReturn.Add(new CPluginVariable("Message Display Duration",             typeof(Int32),   msgDuration));
             // -- Section 6 - Debug Information -----------------------------------
-            lstReturn.Add(new CPluginVariable("Enable !tssquadlist", typeof(Boolean), mEnableTSSquadList));
+            lstReturn.Add(new CPluginVariable("Enable !tssquads", typeof(Boolean), mEnableTSSquadList));
             lstReturn.Add(new CPluginVariable("Enable !tslobby", typeof(Boolean), mEnableTSStaging));
             lstReturn.Add(new CPluginVariable("Enable !tsteam", typeof(Boolean), mEnableTSTeam));
             lstReturn.Add(new CPluginVariable("Enable !tsnosync", typeof(Boolean), mEnableTSNoSync));
@@ -1688,7 +1688,7 @@ namespace PRoConEvents
             else if (strVariable == "Message Display Duration" && Int32.TryParse(strValue, out intOut))
                 msgDuration = (intOut >= 0) ? intOut : msgDuration;
             // -- Section 6 - In-Game Commands -----------------------------------
-            else if (strVariable == "Enable !tssquadlist" && Boolean.TryParse(strValue, out blnOut))
+            else if (strVariable == "Enable !tssquads" && Boolean.TryParse(strValue, out blnOut))
                 mEnableTSSquadList = blnOut;
             else if (strVariable == "Enable !tslobby" && Boolean.TryParse(strValue, out blnOut))
                 mEnableTSStaging = blnOut;
@@ -1847,7 +1847,7 @@ namespace PRoConEvents
                 //Figure out which command to send. 
                 switch (message)
                 {
-                    case "!tslistsquads":
+                    case "!tssquads":
                         addToActionQueue(Commands.DisplayTSSquadList, speaker);
                         break;
                     case "!tslobby":
@@ -1856,7 +1856,7 @@ namespace PRoConEvents
                     case "!tsteam":
                         addToActionQueue(Commands.SetSyncToTeam, speaker);
                         break;
-                    case "!tsnosync":
+                    case "/!tsnosync":
                         addToActionQueue(Commands.SetNoSync, speaker);
                         break;
                     case "!tssync":
@@ -3343,6 +3343,9 @@ namespace PRoConEvents
                     user.IsNoSync = true;
                     user.IsSyncToStaging = false;
                     user.IsSyncToTeam = false;
+                    sayToPlayer("Squad sync disabled for you.", user.GmClient.Name);
+                    sayToPlayer("Type !tssync to re-enable squad sync.", user.GmClient.Name);
+                    sayToPlayer("Squad sync will automatically re-enable at round end.", user.GmClient.Name);
                     
                     break;
                 }
@@ -3358,6 +3361,9 @@ namespace PRoConEvents
                     user.IsNoSync = false;
                     user.IsSyncToTeam = true;
                     user.IsSyncToStaging = false;
+                    sayToPlayer("Moving you to your Team channel.", user.GmClient.Name);
+                    sayToPlayer("Type !tssync to re-enable squad sync.", user.GmClient.Name);
+                    sayToPlayer("Squad sync will automatically re-enable at round end.", user.GmClient.Name);
                     addToActionQueue(Commands.CheckClientForSwapping, user);
                     
                     break;
@@ -3375,8 +3381,10 @@ namespace PRoConEvents
                     user.IsNoSync = false;
                     user.IsSyncToTeam = false;
                     user.IsSyncToStaging = true;
+                    sayToPlayer("Moving you to the TeamSpeak lobby.", user.GmClient.Name);
+                    sayToPlayer("Type !tssync to re-enable squad sync.", user.GmClient.Name);
+                    sayToPlayer("Squad sync will automatically re-enable at round end.", user.GmClient.Name);
                     addToActionQueue(Commands.CheckClientForSwapping, user);
-                    
                     break;
                 }
             }
@@ -3394,6 +3402,8 @@ namespace PRoConEvents
                     user.IsSyncToStaging = false;
 
                     addToActionQueue(Commands.CheckClientForSwapping, user);
+                    sayToPlayer("Squad sync re-enabled.", user.GmClient.Name);
+                    sayToPlayer("Squad sync only functions with 6+ TS players.", user.GmClient.Name);
                     break;
                 }
             }
