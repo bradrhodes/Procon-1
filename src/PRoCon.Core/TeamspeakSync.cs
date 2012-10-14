@@ -24,6 +24,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -933,7 +934,13 @@ namespace PRoConEvents
 
             PlayerJoined,
             PlayerLeft,
-            PlayerSwappedTeamsOrSquads
+            PlayerSwappedTeamsOrSquads,
+            ResetAllUsersSyncFlags,
+            ResetUserSyncFlags,
+            DisplayTSSquadList,
+            SetNoSync,
+            SetSyncToTeam,
+            SetSyncToStaging
         }
         // -- Error Enumerations ----------------------------------------------
         public enum Queries {
@@ -961,7 +968,7 @@ namespace PRoConEvents
 
             RemoveChannelsList,
             RemoveChannelsTeamQuery,
-            RemoveChannelsSquadQuery
+            RemoveChannelsSquadQuery,
         }
         // -- Threading -------------------------------------------------------
         Thread mThreadMain        = null;
@@ -1058,7 +1065,7 @@ namespace PRoConEvents
             /// <summary>Sets the game information</summary>
             public GameClient      GmClient    { get { return gmClient; } set { gmClient = value; } }
             /// <summary>Specifies whether this client is has opted to exempt himself/herself from swapping.</summary>
-            public Boolean         IsOptedOut          { get; set; }
+            public Boolean         IsNoSync          { get; set; }
             /// <summary>Specifies whether the client should be force swapped to the staging channel. </summary>
             public Boolean         IsSyncToStaging     { get; set; }
             /// <summary>Specifies whether the client should be force swapped to the team channel.  </summary>
@@ -1067,14 +1074,14 @@ namespace PRoConEvents
             /// <summary>Creates the MasterClient with teamspeak information.</summary>
             /// <param name="ts">The teamspeak information.</param>
             public MasterClient(TeamspeakClient ts) { tsClient = ts;
-                IsOptedOut      = false;
+                IsNoSync      = false;
                 IsSyncToStaging = false;
                 IsSyncToTeam    = false;
             }
             /// <summary>Creates the MasterClient with game information.</summary>
             /// <param name="gm">The game information.</param>
             public MasterClient(GameClient gm) { gmClient = gm;
-                IsOptedOut      = false;
+                IsNoSync      = false;
                 IsSyncToStaging = false;
                 IsSyncToTeam    = false;
             }
@@ -1714,7 +1721,7 @@ namespace PRoConEvents
         public void OnPluginLoaded(String strHostName, String strPort, String strPRoConVersion)
         {
             // Register Events.
-            this.RegisterEvents("OnPlayerJoin", "OnPlayerLeft", "OnPlayerTeamChange", "OnPlayerSquadChange", "OnListPlayers", "OnPunkbusterPlayerInfo", "OnLevelLoaded", "OnRoundOver");
+            this.RegisterEvents("OnPlayerJoin", "OnPlayerLeft", "OnPlayerTeamChange", "OnPlayerSquadChange", "OnListPlayers", "OnPunkbusterPlayerInfo", "OnLevelLoaded", "OnRoundOver", "OnGlobalChat", "OnTeamChat", "OnSquadChat");
 
             // Create thread so UI doesn't hang up on networking.
             try
@@ -1826,7 +1833,50 @@ namespace PRoConEvents
         {
             mBetweenRounds = true;
             if (mEnabled && !mTsReconnecting)
+            {
+                addToActionQueue(Commands.ResetAllUsersSyncFlags);
                 addToActionQueue(Commands.CheckAllClientsForSwapping);
+            }
+                
+        }
+        /// <summary>Used to handle the in-game control commands. </summary>
+        public void OnGlobalChat(string speaker, string message)
+        {
+            
+            if (mEnabled && !mTsReconnecting)
+            {
+                //Figure out which command to send. 
+                switch (message)
+                {
+                    case "!tslistsquads":
+                        addToActionQueue(Commands.DisplayTSSquadList, speaker);
+                        break;
+                    case "!tsstaging":
+                        addToActionQueue(Commands.SetSyncToStaging, speaker);
+                        break;
+                    case "!tsteam":
+                        addToActionQueue(Commands.SetSyncToTeam, speaker);
+                        break;
+                    case "!tsnosync":
+                        addToActionQueue(Commands.SetNoSync, speaker);
+                        break;
+                    case "!tssquad":
+                        addToActionQueue(Commands.ResetUserSyncFlags, speaker);
+                        break;
+                }
+            }
+        }
+        /// <summary>Used to handle the in-game control commands. </summary>
+        public void OnTeamChat(string speaker, string message, int teamId)
+        {
+            //Uses the same logic as OnGlobalChat, so just call that.
+            OnGlobalChat(speaker, message);
+        }
+        /// <summary>Used to handle the in-game control commands. </summary>
+        public void OnSquadChat(string speaker, string message, int teamId, int squadId)
+        {
+            //Uses the same logic as OnGlobalChat, so just call that.
+            OnGlobalChat(speaker, message);
         }
 
 
@@ -1952,6 +2002,27 @@ namespace PRoConEvents
                         case Commands.PlayerSwappedTeamsOrSquads:
                             debugWrite(dbgEvents, "[Event] Processing Swapped Teams or Squads Event.");
                             playerSwappedTeamsOrSquads((String)mCurrentAction.Argument, (Int32)mCurrentAction.Argument, (Int32)mCurrentAction.Argument);
+                            break;
+                        case Commands.SetSyncToStaging:
+                            debugWrite(dbgEvents, "[Event] Processing Sync to Staging event for Player.");
+                            break;
+                        case Commands.SetSyncToTeam:
+                            debugWrite(dbgEvents, "[Event] Processing Set Sync to Team event for Player.");
+                            break;
+                        case Commands.SetNoSync:
+                            debugWrite(dbgEvents, "[Event] Processing Set No Sync event for Player.");
+                            SetNoSyncFlagForPlayer((string)mCurrentAction.Argument);
+                            break; 
+                        case Commands.ResetUserSyncFlags:
+                            debugWrite(dbgEvents, "[Event] Processing Sync Flag Reset for Player.");
+                            break;
+                        case Commands.ResetAllUsersSyncFlags:
+                            debugWrite(dbgEvents, "[Event] Resetting all player sync flags.");
+                            ResetAllUserSyncFlags();
+                            break;
+                        case Commands.DisplayTSSquadList:
+                            debugWrite(dbgEvents, "[Event] Processing DisplayTSSquadList event.");
+                            DisplayTsSquadList((string)mCurrentAction.Argument);
                             break;
                     }
                 } catch (Exception e) {
@@ -2545,8 +2616,8 @@ namespace PRoConEvents
         /// <param name="client">The client to check.</param>
         public void checkClientForSwap(MasterClient client)
         {
-            // Do not proceed if the client is not in either server or if the client is a spectator.
-            if (!client.HasGmClient || !client.HasTsClient || client.GmClient.TeamId == 0)
+            // Do not proceed if the client is not in either server or if the client is a spectator or if the client is marked as No Sync
+            if (!client.HasGmClient || !client.HasTsClient || client.GmClient.TeamId == 0 || client.IsNoSync)
                 return;
 
             // Used for debug print.
@@ -2555,8 +2626,9 @@ namespace PRoConEvents
             // Move To Staging Channel If:
             //   Team Based swapping is off, or
             //   The number of players is lower than the team swapping threshold, or
-            //   Intermission swapping is on and the game is in intermission.
-            if (!synTeamBasedSwapping || getPlayersOnBothServers().Count < synTeamBasedThreshold || (synIntermissionSwapping && mBetweenRounds))
+            //   Intermission swapping is on and the game is in intermission, or 
+            //   The player is marked as Sync to Staging.
+            if (!synTeamBasedSwapping || getPlayersOnBothServers().Count < synTeamBasedThreshold || (synIntermissionSwapping && mBetweenRounds) || client.IsSyncToStaging)
             {
                 // Move the client to the staging channel.
                 if (client.TsClient.medChannelId != mStagingChannel.tsId)
@@ -2575,8 +2647,9 @@ namespace PRoConEvents
             //   Squad Based swapping is off, or
             //   The number of players is less than the squad swapping threshold, or
             //   The player is not in a squad, or
-            //   The number of players in the squad is less than the squad swapping minimum.
-            else if (!synSquadBasedSwapping || getPlayersOnBothServersOnTeam(client.GmClient.TeamId).Count < synSquadBasedThreshold || client.GmClient.SquadId == 0 || getPlayersOnBothServersOnSquad(client.GmClient.TeamId, client.GmClient.SquadId).Count < synSquadSizeMinimum)
+            //   The number of players in the squad is less than the squad swapping minimum, or
+            //   The player is marked as Sync to Team
+            else if (!synSquadBasedSwapping || getPlayersOnBothServersOnTeam(client.GmClient.TeamId).Count < synSquadBasedThreshold || client.GmClient.SquadId == 0 || getPlayersOnBothServersOnSquad(client.GmClient.TeamId, client.GmClient.SquadId).Count < synSquadSizeMinimum || client.IsSyncToTeam)
             {
                 // Locate / Create the team channel.
                 if (!mTeamChannels.ContainsKey(client.GmClient.TeamId)) {
@@ -3204,6 +3277,73 @@ namespace PRoConEvents
             }
             mTsResponse = mTsConnection.send(query);
             mTsPrevSendTime = DateTime.Now;
+        }
+        /// <summary>Finds all TS squads that are not full with players on TS and reports this to the player. </summary>
+        public void DisplayTsSquadList(string playerName)
+        {
+            //TODO: Implement.  
+        }
+        /// <summary>
+        /// Sets all users to have no special sync flags.  
+        /// </summary>
+        public void ResetAllUserSyncFlags()
+        {
+            foreach(var user in mClientAllInfo)
+            {
+                user.IsSyncToTeam = false;
+                user.IsSyncToStaging = false;
+                user.IsNoSync = false;
+            }
+        }
+        /// <summary>Sets the NoSync flag for a player on the server.  This player will be ignored by Teamsync until the next round or until the flag is reset. </summary>
+        public void SetNoSyncFlagForPlayer(string playerName)
+        {
+            foreach (var user in mClientAllInfo.Where(user => user.GmClient.Name == playerName))
+            {
+                user.IsNoSync = true;
+                user.IsSyncToStaging = false;
+                user.IsSyncToTeam = false;
+                break;
+            }
+        }
+        /// <summary>Sets the Sync to Team flag for a player on the server.  This player will be kept in the team channel until the next round or until the flag is reset. </summary>
+        public void SetSyncToTeamFlagForPlayer(string playerName)
+        {
+            foreach (var user in mClientAllInfo.Where(user => user.GmClient.Name == playerName))
+            {
+                user.IsNoSync = false;
+                user.IsSyncToTeam = true;
+                user.IsSyncToStaging = false;
+                addToActionQueue(Commands.CheckClientForSwapping, user);
+                break;
+            }
+
+        }
+        /// <summary>Sets the Sync to Staging flag for a player on the server.  This player will be kept in the staging channel until the next round or until the flag is reset. </summary>
+        public void SetSyncToStagingFlagForPlayer(string playerName)
+        {
+            foreach (var user in mClientAllInfo.Where(user => user.GmClient.Name == playerName))
+            {
+                user.IsNoSync = false;
+                user.IsSyncToTeam = false;
+                user.IsSyncToStaging = true;
+                addToActionQueue(Commands.CheckClientForSwapping, user);
+                break;
+            }
+            
+        }
+        /// <summary>Sets all player Sync flags to false.  This resumes default TSSync behavior.</summary>
+        public void ResetSyncFlagsForPlayer(string playerName)
+        {
+            foreach (var user in mClientAllInfo.Where(user => user.GmClient.Name == playerName))
+            {
+                user.IsNoSync = false;
+                user.IsSyncToTeam = false;
+                user.IsSyncToStaging = false;
+                addToActionQueue(Commands.CheckClientForSwapping, user);
+                break;
+            }
+
         }
     }
 }
