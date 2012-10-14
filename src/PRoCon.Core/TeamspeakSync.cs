@@ -968,7 +968,7 @@ namespace PRoConEvents
 
             RemoveChannelsList,
             RemoveChannelsTeamQuery,
-            RemoveChannelsSquadQuery,
+            RemoveChannelsSquadQuery
         }
         // -- Threading -------------------------------------------------------
         Thread mThreadMain        = null;
