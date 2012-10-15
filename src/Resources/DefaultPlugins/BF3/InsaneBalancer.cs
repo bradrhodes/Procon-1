@@ -14,7 +14,6 @@
 
 using System;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Reflection;
 using System.Collections.Generic;
@@ -6125,6 +6124,7 @@ namespace PRoConEvents {
         private void resetPlayerStats()
         {
 
+            int num_squads = 26;
             List<PlayerProfile> players_list = getPlayersProfile("");
             foreach (PlayerProfile player in players_list)
             {
