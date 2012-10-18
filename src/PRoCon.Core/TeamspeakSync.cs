@@ -3326,6 +3326,7 @@ namespace PRoConEvents
         /// <summary>Finds all TS squads that are not full with players on TS and reports this to the player. </summary>
         public void DisplayTsSquadList(string playerName)
         {
+            debugWrite(dbgEvents, "[Event] Displaying TS squad list for " + playerName);
             string[] squadNames =
                 {"No Squad","Alpha","Bravo","Charlie","Delta","Echo","Foxtrot","Golf","Hotel","India","Juliet","Kilo","Lima","Mike","November","Oscar","Papa","Quebec","Romeo","Sierra","Tango","Uniform","Victor","Whiskey","Xray","Yankee","Zulu"};
             //Find the player's team.  
@@ -3346,14 +3347,15 @@ namespace PRoConEvents
                         playerTeam = clientTeam;
                     }
 
-                    //Make sure dictionary has all appropriate objects.  
-                    if(squadInfo.ContainsKey(clientTeam) && !squadInfo[clientTeam].ContainsKey(clientSquad))
+                    //Make sure dictionary has all appropriate objects.
+                    if(!squadInfo.ContainsKey(clientTeam))
                     {
-                       squadInfo[clientTeam][clientSquad] = new TsGameSquadInfo();
-                    }
-                    else
-                    {
+                        debugWrite(dbgEvents, "[Event] Creating team " + clientTeam);
                         squadInfo[clientTeam] = new Dictionary<int, TsGameSquadInfo>();
+                    }
+                    if(!squadInfo[clientTeam].ContainsKey(clientSquad))
+                    {
+                        debugWrite(dbgEvents, "[Event] Creating squad " + clientSquad + " for team " + clientTeam);
                         squadInfo[clientTeam][clientSquad] = new TsGameSquadInfo();
                     }
 
@@ -3364,7 +3366,6 @@ namespace PRoConEvents
                     }
                 }
             }
-
             
             if(playerTeam != -1)
             {
@@ -3375,6 +3376,7 @@ namespace PRoConEvents
                 bool squadFound = false;
                 foreach(KeyValuePair<int, TsGameSquadInfo> teamSquad in squads)
                 {
+                    debugWrite(dbgEvents, "[Event] Squad " + squadNames[teamSquad.Key] + ", TS: "+ teamSquad.Value.TsCount + ", Game: "+ teamSquad.Value.InGameCount );
                     if(teamSquad.Value.TsCount > 0 && teamSquad.Value.TsCount < 4)
                     {
                         squadFound = true;
