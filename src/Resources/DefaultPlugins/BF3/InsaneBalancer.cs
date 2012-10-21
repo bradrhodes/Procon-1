@@ -1220,6 +1220,8 @@ namespace PRoConEvents {
             this.booleanVariables.Add("kick_idle", true);
             this.booleanVariables.Add("balance_idle", true);
             this.booleanVariables.Add("wait_death", false);
+            this.booleanVariables.Add("say_on_move", false);
+            this.booleanVariables.Add("yell_on_move", false);
 
 
             this.booleanVariables.Add("quiet_mode", false);
@@ -1247,6 +1249,7 @@ namespace PRoConEvents {
             this.integerVariables.Add("ticket_threshold_percent", 25);
             this.integerVariables.Add("ticket_threshold_max", 200);
             this.integerVariables.Add("keep_squads_playercount", 10);
+            this.integerVariables.Add("message_yell_duration", 20);
 
 
             this.integerVarValidators = new Dictionary<string, integerVariableValidator>();
@@ -1267,6 +1270,7 @@ namespace PRoConEvents {
             this.integerVarValidators.Add("ticket_threshold_max", integerValidator);
             this.integerVarValidators.Add("wait_death_count", integerValidator);
             this.integerVarValidators.Add("keep_squads_playercount", integerValidator);
+            this.integerVarValidators.Add("message_yell_duration", integerValidator);
 
             /* set up per-map intervals */
             List<String> map_interval = new List<string>();
@@ -1301,6 +1305,8 @@ namespace PRoConEvents {
             this.booleanVarValidators.Add("kick_idle", booleanValidator);
             this.booleanVarValidators.Add("balance_idle", booleanValidator);
             this.booleanVarValidators.Add("wait_death", booleanValidator);
+            this.booleanVarValidators.Add("say_on_move", booleanValidator);
+            this.booleanVarValidators.Add("yell_on_move", booleanValidator);
 
             this.stringVarValidators = new Dictionary<string, stringVariableValidator>();
             this.stringVarValidators.Add("round_sort", stringValidator);
@@ -1325,6 +1331,8 @@ namespace PRoConEvents {
             this.stringVariables.Add("round_sort", "spm_desc_round");
             this.stringVariables.Add("live_sort", "time_desc_round");
             this.stringVariables.Add("console", "Type a command here to test");
+            this.stringVariables.Add("message_to_say", "The message to send to players on being teamswapped.");
+            this.stringVariables.Add("message_to_yell", "The message to yell to a player on being teamswapped.");
 
             this.hiddenVariables = new List<string>();
             //this.hiddenVariables.Add("advanced_mode");
@@ -1380,6 +1388,11 @@ namespace PRoConEvents {
             live_balancer_group.Add("ticket_threshold_max");
             live_balancer_group.Add("disable_team_change");
             live_balancer_group.Add("balance_idle");
+            live_balancer_group.Add("say_on_move");
+            live_balancer_group.Add("message_to_say");
+            live_balancer_group.Add("yell_on_move");
+            live_balancer_group.Add("message_to_yell");
+            live_balancer_group.Add("message_yell_duration");
 
             settings_group.Add("Round Interval", map_interval);
             settings_group.Add("Whitelist", whitelist_group);
@@ -1912,7 +1925,7 @@ namespace PRoConEvents {
         }
 
         public string GetPluginVersion() {
-            return "0.0.0.9";
+            return "0.0.0.9-PURE";
         }
 
         public string GetPluginAuthor() {
@@ -2286,6 +2299,26 @@ namespace PRoConEvents {
                 For example: ""!show round stats"" will print the player statistic for the current round in the plugin console.     
                 </blockquote> 
            </li>
+           <li><blockquote><strong>say_on_move</strong><br />
+                <i>(boolean)</i> - Send a say to the player who was moved upon moving the player.</br>   
+                </blockquote> 
+           </li>
+           <li><blockquote><strong>message_to_say</strong><br />
+                <i>(string)</i> - The message that will be sent to the player who was moved.</br>    
+                </blockquote> 
+           </li>
+           <li><blockquote><strong>yell_on_say</strong><br />
+                <i>(boolean)</i> - Send a yell to the player who was moved upon moving the player.</br>    
+                </blockquote> 
+           </li>
+           <li><blockquote><strong>message_yell_duration</strong><br />
+                <i>(integer)</i> - The amount of time the move yell will be displayed to the player.</br>    
+                </blockquote> 
+           </li>
+           <li><blockquote><strong>message_to_yell</strong><br />
+                <i>(string)</i> - The message that will be yelled to the player who was moved.</br>    
+                </blockquote> 
+           </li>
         </ol>
 
         <h2>Public In-Game Commands</h2>
@@ -2636,6 +2669,7 @@ namespace PRoConEvents {
             /* initialize hash with player count for 16 teams*/
             Dictionary<int, int> player_count = getPlayerCount();
             int total = player_count[1] + player_count[2];
+            DebugWrite("Player count Team 1: " + player_count[1] + "; Team 2: " + player_count[2], 5);
 
             int difference = Math.Abs(player_count[1] - player_count[2]);
             int balance_threshold = getIntegerVarValue("balance_threshold");
@@ -4215,6 +4249,16 @@ namespace PRoConEvents {
             if (!(virtual_mode || getBooleanVarValue("virtual_mode"))) {
                 if (sleep)
                     Thread.Sleep(100);
+
+                //Send messages if necessary.
+                if(getBooleanVarValue("say_on_move"))
+                {
+                    SendPlayerMessage(player.name, getStringVarValue("message_to_say"));
+                }
+                if(getBooleanVarValue("yell_on_move"))
+                {
+                    SendPlayerMessage(player.name, getStringVarValue("message_to_yell"), getIntegerVarValue("message_yell_duration"));
+                }
                 ExecCommand("admin.movePlayer", player.name, teamId.ToString(), squadId.ToString(), "true");
             }
             player.setTeamId(teamId);
@@ -5219,10 +5263,7 @@ namespace PRoConEvents {
         }
 
         private void SendPlayerMessage(string soldierName, string message) {
-            if (getBooleanVarValue("quiet_mode") && !isAdmin(soldierName))
-                return;
-
-            if (soldierName == null)
+            if (getBooleanVarValue("quiet_mode") || soldierName == null )
                 return;
 
             /* Temporarily disable player messages until DICE 
@@ -5230,6 +5271,16 @@ namespace PRoConEvents {
              */
 
             ExecCommand("admin.say", message, "player", soldierName);
+        }
+
+        private void SendPlayerMessage(string soldierName, string message, int duration)
+        {
+            if (getBooleanVarValue("quiet_mode") || soldierName == null)
+                return;
+            DebugWrite("Yelling to "+ soldierName + "with duration " + duration, 5);
+            ExecCommand("admin.yell", message, duration.ToString(), "player", soldierName);
+
+
         }
 
         private void SendGlobalMessage(string message) {
