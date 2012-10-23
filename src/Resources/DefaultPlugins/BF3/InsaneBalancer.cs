@@ -4253,7 +4253,11 @@ namespace PRoConEvents {
                 //Send messages if necessary.
                 if(getBooleanVarValue("say_on_move"))
                 {
-                    SendPlayerMessage(player.name, getStringVarValue("message_to_say"));
+                    string[] splitStrings = {"\n", "\\n"};
+                    foreach(string line in getStringVarValue("message_to_say").Split(splitStrings, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        SendPlayerMessage(player.name, line);
+                    }
                 }
                 if(getBooleanVarValue("yell_on_move"))
                 {
@@ -5013,8 +5017,8 @@ namespace PRoConEvents {
 
             // We have to check if one is allowed to change loosing team after ticket threshold
             if (player.getTeamId() > 0 && oldteamId != iTeamID && checkTicketThreshold() && getBooleanVarValue("disable_team_change") && loosingTeamId == oldteamId) {
-                SendPlayerMessage(player.name, "Warning! You are not allowed to change loosing team after ticket threshold : " + getIntegerVarValue("ticket_threshold").ToString());
-                DebugWrite("Player " + player.name + " tryes to change loosing team after ticked threshold reached!", 1);
+                SendPlayerMessage(player.name, "Warning! You are not allowed to change losing team after ticket threshold : " + getIntegerVarValue("ticket_threshold").ToString());
+                DebugWrite("Player " + player.name + " tryes to change losing team after ticked threshold reached!", 1);
                 bool original_value = this.virtual_mode;
                 this.virtual_mode = false;
                 player.setMovingByAdmin(true);
