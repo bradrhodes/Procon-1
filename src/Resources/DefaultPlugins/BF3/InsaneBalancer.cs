@@ -1333,6 +1333,9 @@ namespace PRoConEvents {
             this.stringVariables.Add("console", "Type a command here to test");
             this.stringVariables.Add("message_to_say", "The message to send to players on being teamswapped.");
             this.stringVariables.Add("message_to_yell", "The message to yell to a player on being teamswapped.");
+            this.stringVariables.Add("sql_debug_server", "");
+            this.stringVariables.Add("sql_debug_user", "");
+            this.stringVariables.Add("sql_debug_pass", "");
 
             this.hiddenVariables = new List<string>();
             //this.hiddenVariables.Add("advanced_mode");
@@ -3434,7 +3437,7 @@ namespace PRoConEvents {
             }
         }
 
-        private bool checkTicketThreshold() {
+        private bool isAtOrBelowTicketThreshold() {
             List<TeamScore> scores = null;
             String gamemode = null;
             lock (info_mutex) {
@@ -3476,8 +3479,8 @@ namespace PRoConEvents {
                     min_score = score.Score;
                     min_team = score.TeamID;
                 }
-
-                if (min_score <= Math.Min(min_tickets / 100 * max_round_tickets, max_tickets)) {
+                DebugWrite("Checking ticket threshold: min_score: " + min_score + " pct Threshold: " + (min_tickets / 100.0) * max_round_tickets + " max_tickets: " + max_tickets, 2);
+                if (min_score <= Math.Min(min_tickets / 100.0 * max_round_tickets, max_tickets)) {
                     DebugWrite("Not running live balancer, Team(" + TN(min_team) + ") has only " + min_score + " ticket" + ((min_score > 1) ? "s" : "") + " left to lose", 1);
                     return true;
                 }
@@ -3558,7 +3561,7 @@ namespace PRoConEvents {
                 }
 
                 // do not balance if there min ticket have been reached
-                if (!force && checkTicketThreshold())
+                if (!force && isAtOrBelowTicketThreshold())
                     return;
 
 
@@ -4238,10 +4241,36 @@ namespace PRoConEvents {
             }
 
 
+
+
             /* first move player to the no-squad, to guarantee a spot (unless he is already going to the no-squad, or stays in the same team) */
             if ((squadId != 0 || player.getTeamId() != teamId) && !(virtual_mode || getBooleanVarValue("virtual_mode"))) {
                 if (sleep)
                     Thread.Sleep(100);
+                DebugWrite("Actually moving player " + player.name + " lastSpawn: " + player.last_spawn.ToLongTimeString() + " isAlive: " + player.isAlive() + " isDead: " + player.isDead() + "sort stat: " + player.getRoundTime().ToLongTimeString(), 1);
+                DebugWrite(
+                    "From Team.Squad: " + player.getTeamId() + "." + player.getSquadId() + " To Team.Squad: " + teamId +
+                    "." + squadId, 1);
+                foreach(TeamScore thing in serverInfo.TeamScores)
+                {
+                    DebugWrite(
+                        "Team " + thing.TeamID + " Winning Score: " + thing.WinningScore + " Score: " + thing.Score, 1);
+                }
+                
+                //Send messages if necessary.
+                if (getBooleanVarValue("say_on_move"))
+                {
+                    string[] splitStrings = { "\n", "\\n" };
+                    foreach (string line in getStringVarValue("message_to_say").Split(splitStrings, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        SendPlayerMessage(player.name, line);
+                    }
+                }
+                if (getBooleanVarValue("yell_on_move"))
+                {
+                    SendPlayerMessage(player.name, getStringVarValue("message_to_yell"), getIntegerVarValue("message_yell_duration"));
+                }
+
                 ExecCommand("admin.movePlayer", player.name, teamId.ToString(), "0", "true");
             }
 
@@ -4250,19 +4279,7 @@ namespace PRoConEvents {
                 if (sleep)
                     Thread.Sleep(100);
 
-                //Send messages if necessary.
-                if(getBooleanVarValue("say_on_move"))
-                {
-                    string[] splitStrings = {"\n", "\\n"};
-                    foreach(string line in getStringVarValue("message_to_say").Split(splitStrings, StringSplitOptions.RemoveEmptyEntries))
-                    {
-                        SendPlayerMessage(player.name, line);
-                    }
-                }
-                if(getBooleanVarValue("yell_on_move"))
-                {
-                    SendPlayerMessage(player.name, getStringVarValue("message_to_yell"), getIntegerVarValue("message_yell_duration"));
-                }
+
                 ExecCommand("admin.movePlayer", player.name, teamId.ToString(), squadId.ToString(), "true");
             }
             player.setTeamId(teamId);
@@ -4961,7 +4978,7 @@ namespace PRoConEvents {
             }
             if (max_tickets > max_round_tickets)
                 max_round_tickets = max_tickets;
-            DebugWrite("max round tickets : " + max_round_tickets, 1);
+            DebugWrite("max round tickets : " + max_round_tickets, 4);
         }
 
 
@@ -5016,7 +5033,7 @@ namespace PRoConEvents {
             int loosingTeamId = getLoosingTeamId();
 
             // We have to check if one is allowed to change loosing team after ticket threshold
-            if (player.getTeamId() > 0 && oldteamId != iTeamID && checkTicketThreshold() && getBooleanVarValue("disable_team_change") && loosingTeamId == oldteamId) {
+            if (player.getTeamId() > 0 && oldteamId != iTeamID && isAtOrBelowTicketThreshold() && getBooleanVarValue("disable_team_change") && loosingTeamId == oldteamId) {
                 SendPlayerMessage(player.name, "Warning! You are not allowed to change losing team after ticket threshold : " + getIntegerVarValue("ticket_threshold").ToString());
                 DebugWrite("Player " + player.name + " tryes to change losing team after ticked threshold reached!", 1);
                 bool original_value = this.virtual_mode;
@@ -5273,15 +5290,16 @@ namespace PRoConEvents {
             /* Temporarily disable player messages until DICE 
              * enables individual player messages
              */
-
             ExecCommand("admin.say", message, "player", soldierName);
+            DebugWrite("Saying to: " + soldierName, 2);
+            DebugWrite("Message:  " + message, 2);
         }
-
         private void SendPlayerMessage(string soldierName, string message, int duration)
         {
             if (getBooleanVarValue("quiet_mode") || soldierName == null)
                 return;
-            DebugWrite("Yelling to "+ soldierName + "with duration " + duration, 5);
+            DebugWrite("Yelling to "+ soldierName + "with duration " + duration, 2);
+            DebugWrite("Message: " + message, 2);
             ExecCommand("admin.yell", message, duration.ToString(), "player", soldierName);
 
 
@@ -6579,6 +6597,5 @@ namespace PRoConEvents {
             if (check_state_phase == 1)
                 startCheckState(utc);
         }
-
     }
 }
