@@ -46,6 +46,15 @@ namespace PRoConEvents
 
         #region Main Classes
 
+        /// <summary>Holds information about squds in game that are also in Teamspeak.</summary>
+        public class TsGameSquadInfo
+        {
+            /// <summary>Number of players in this squad in-game. </summary>
+            public int InGameCount = 0;
+            /// <summary>Number of players in this squad in TS. </summary>
+            public int TsCount = 0;
+        }
+
         /// <summary>Holds all the information needed to connect to a TS3 server.</summary>
         public class TeamspeakConnection
         {
@@ -3317,8 +3326,87 @@ namespace PRoConEvents
         /// <summary>Finds all TS squads that are not full with players on TS and reports this to the player. </summary>
         public void DisplayTsSquadList(string playerName)
         {
-            //TODO: Implement.  
-            sayToPlayer("Be advised: This command is not yet implemented.  Out.", playerName);
+            debugWrite(dbgEvents, "[Event] Displaying TS squad list for " + playerName);
+            string[] squadNames =
+                {"No Squad","Alpha","Bravo","Charlie","Delta","Echo","Foxtrot","Golf","Hotel","India","Juliet","Kilo","Lima","Mike","November","Oscar","Papa","Quebec","Romeo","Sierra","Tango","Uniform","Victor","Whiskey","Xray","Yankee","Zulu"};
+            //Find the player's team.  
+            int playerTeam = -1;
+            //First key is team ID, second key is squad ID.  Inner value is the squad player count info.  
+            Dictionary<int, Dictionary<int, TsGameSquadInfo>> squadInfo = new Dictionary<int, Dictionary<int, TsGameSquadInfo>>();
+            
+            foreach(MasterClient client in mClientAllInfo)
+            {
+                if(client.HasGmClient)
+                {
+                    int clientTeam = client.GmClient.TeamId;
+                    int clientSquad = client.GmClient.SquadId;
+                    
+                    //If we've found the callee, save this person's team id.  
+                    if(client.GmClient.Name == playerName)
+                    {
+                        playerTeam = clientTeam;
+                    }
+
+                    //Make sure dictionary has all appropriate objects.
+                    if(!squadInfo.ContainsKey(clientTeam))
+                    {
+                        debugWrite(dbgEvents, "[Event] Creating team " + clientTeam);
+                        squadInfo[clientTeam] = new Dictionary<int, TsGameSquadInfo>();
+                    }
+                    if(!squadInfo[clientTeam].ContainsKey(clientSquad))
+                    {
+                        debugWrite(dbgEvents, "[Event] Creating squad " + clientSquad + " for team " + clientTeam);
+                        squadInfo[clientTeam][clientSquad] = new TsGameSquadInfo();
+                    }
+
+                    squadInfo[clientTeam][clientSquad].InGameCount++;
+                    if(client.HasTsClient)
+                    {
+                        squadInfo[clientTeam][clientSquad].TsCount++;
+                    }
+                }
+            }
+            
+            if(playerTeam != -1)
+            {
+                const string squadMessage = "{0}: ({1}/{2})";
+                List<string> messagesToSend = new List<string>();
+                //Get the squad list for the appropriate team.  Ensure at least 1 person on TS, and at least 1 free slot.  
+                Dictionary<int, TsGameSquadInfo> squads = squadInfo[playerTeam];
+                bool squadFound = false;
+                foreach(KeyValuePair<int, TsGameSquadInfo> teamSquad in squads)
+                {
+                    debugWrite(dbgEvents, "[Event] Squad " + squadNames[teamSquad.Key] + ", TS: "+ teamSquad.Value.TsCount + ", Game: "+ teamSquad.Value.InGameCount );
+                    if(teamSquad.Value.TsCount > 0 && teamSquad.Value.TsCount < 4)
+                    {
+                        squadFound = true;
+                        string message = String.Format(squadMessage, squadNames[teamSquad.Key], teamSquad.Value.TsCount,
+                                      teamSquad.Value.InGameCount);
+                        messagesToSend.Add(message);
+                    }
+                }
+                //If there are no squads, tell the player so.  Otherwise, write the message to the player.  
+                if(!squadFound)
+                {
+                    sayToPlayer("No free squads found. Start one yourself and encourage people to join!", playerName);
+                }
+                else
+                {
+                    sayToPlayer("Squads with 1-3 Teamspeak Players:", playerName);
+                    sayToPlayer("Key: Name (# TS Players/# Squad Members)", playerName);
+                    string finalMessageString = "";
+                    for(int i = 0; i<messagesToSend.Count; i++)
+                    {
+                        finalMessageString += messagesToSend[i];
+                        if(i != (messagesToSend.Count-1))
+                        {
+                            finalMessageString += ", ";
+                        }
+                    }
+                    sayToPlayer(finalMessageString, playerName);
+                }
+            }
+
         }
         /// <summary>
         /// Sets all users to have no special sync flags.  
