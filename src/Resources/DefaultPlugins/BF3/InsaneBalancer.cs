@@ -4229,6 +4229,7 @@ namespace PRoConEvents {
 
 
         private bool movePlayer(PlayerProfile player, int teamId, int squadId, bool force, bool ignore_white_list) {
+
             if (player == null)
                 return false;
 
@@ -4240,7 +4241,13 @@ namespace PRoConEvents {
                 return false;
             }
 
-
+            // Run another check to ensure that someone who was already dead and marked for moving before the threshold passes does not get moved
+            // after the threshold passes (Only happens on delayed moves).  
+            if(isAtOrBelowTicketThreshold())
+            {
+                DebugWrite("Player + ^b"+ player.ToString() + "^n will not be moved as the game is now below the ticket threshold.", 1);
+                return false;
+            }
 
 
             /* first move player to the no-squad, to guarantee a spot (unless he is already going to the no-squad, or stays in the same team) */
