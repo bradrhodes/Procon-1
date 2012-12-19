@@ -897,8 +897,8 @@ namespace PRoConEvents
 
         private void CheckServerSize()
         {
-            var iCurrentGameModeMin = (int) Math.Ceiling(m_iCurrentGameModeMax * .8);
-            var iAdjustedPlayerCount = this.m_iPlayerServerSize[Math.Min(this.m_iCurrentPlayerCount + this.m_DPlayerJoined.Count, this.m_iMaxServerSize)];
+            int iCurrentGameModeMin = (int) Math.Ceiling(m_iCurrentGameModeMax * .75);
+            int iAdjustedPlayerCount = this.m_iPlayerServerSize[Math.Min(this.m_iCurrentPlayerCount + this.m_DPlayerJoined.Count, this.m_iMaxServerSize)];
             this.m_iDesiredServerSize = Math.Min(this.m_iCurrentGameModeMax, iCurrentGameModeMin);
 
             if (iAdjustedPlayerCount < iCurrentGameModeMin)
