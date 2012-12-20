@@ -1228,7 +1228,7 @@ namespace PRoConEvents
         /// <summary>Allows PRoCon to get the name of this plugin.</summary>
         public string GetPluginName() { return "Teamspeak 3 Sync"; }
         /// <summary>Allows PRoCon to get the version of this plugin.</summary>
-        public string GetPluginVersion() { return "0.9.7.1"; }
+        public string GetPluginVersion() { return "0.9.7.1a"; }
         /// <summary>Allows PRoCon to get the author's name of this plugin.</summary>
         public string GetPluginAuthor() { return "Imisnew2"; }
         /// <summary>Allows PRoCon to get the website for this plugin.</summary>
@@ -3491,7 +3491,8 @@ namespace PRoConEvents
 
                     addToActionQueue(Commands.CheckClientForSwapping, user);
                     sayToPlayer("Squad sync re-enabled.", user.GmClient.Name);
-                    sayToPlayer("Squad sync only functions with 6+ TS players.", user.GmClient.Name);
+                    //Following line not needed with new TS settings. 
+					//sayToPlayer("Squad sync only functions with 6+ TS players.", user.GmClient.Name);
                     break;
                 }
             }
