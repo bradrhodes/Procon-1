@@ -1776,6 +1776,8 @@ namespace PRoConEvents
                 dbgSwapping = blnOut;
             else if (strVariable == "Show Debug Messages (Network)" && Boolean.TryParse(strValue, out blnOut))
                 dbgNetwork = blnOut;
+            else if (strVariable == "Show Debug Messages (Bouncer)" && Boolean.TryParse(strValue, out blnOut))
+                dbgBouncer = blnOut;
 
             // -- Section 8 - Event Bouncer --------------------------------------
             else if (strVariable == "Enable Event Bouncer" && Boolean.TryParse(strValue, out blnOut))
@@ -1863,7 +1865,7 @@ namespace PRoConEvents
         }
 
         /// <summary>Is called when a player spawns.</summary>
-        public void OnPlayerSpawned(String strSoldierName)
+        public void OnPlayerSpawned(String strSoldierName, Inventory spawnedInventory)
         {
             if (mEnabled && !mTsReconnecting)
                 addToActionQueue(Commands.PlayerSpawned, strSoldierName);
@@ -2962,7 +2964,8 @@ namespace PRoConEvents
         {
             if (mEnableBouncer)
             {
-                Boolean needsKick = false;
+                Boolean needsKick = true;
+                String kMsg = "";
 
                 foreach (MasterClient mstClient in mClientAllInfo)
                 {
@@ -2973,9 +2976,11 @@ namespace PRoConEvents
                         {
                             // Player may not have a TS client yet depending on timing.
                             debugWrite(dbgBouncer, "[BNC] Player " + Name + " has TS Client.");
-
+                            
                             int chanId = mstClient.TsClient.medChannelId.HasValue ?
                                 mstClient.TsClient.medChannelId.Value : -1;
+
+                            kMsg += "ChanID: " + chanId + " Checked IDs: " + mStagingChannel.tsId + ",";
 
                             // Check to see if user is in staging channel.
                             if (chanId == mStagingChannel.tsId)
@@ -2983,30 +2988,36 @@ namespace PRoConEvents
 
                             // Check to see if the user is in a pickup channel.
                             foreach (TeamspeakChannel pickupChannel in mPickupChannels)
+                            {
+                                kMsg += pickupChannel.tsId + ",";
                                 if (chanId == pickupChannel.tsId)
                                 {
                                     needsKick = false;
                                     break;
                                 }
-
+                            }
                             // Check to see if the user is in a team channel.
                             foreach (TeamspeakChannel teamChannel in mTeamChannels.Values)
+                            {
+                                kMsg += teamChannel.tsId + ",";
                                 if (chanId == teamChannel.tsId)
                                 {
                                     needsKick = false;
                                     break;
                                 }
+                            }
 
                             // Check to see if the user is in a squad channel.
                             foreach (Dictionary<Int32, TeamspeakChannel> teamChannels in mSquadChannels.Values)
                                 foreach (TeamspeakChannel squadChannel in teamChannels.Values)
+                                {
+                                    kMsg += squadChannel.tsId + ",";
                                     if (chanId == squadChannel.tsId)
                                     {
                                         needsKick = false;
                                         break;
                                     }
-
-                            needsKick = true;
+                                }
                         }
                         else
                         {
@@ -3018,6 +3029,8 @@ namespace PRoConEvents
                         if (needsKick)
                         {
                             debugWrite(dbgBouncer, "[BNC] Player " + Name + " not found on TS/in proper channel. Kicking.");
+                            debugWrite(dbgBouncer, "[BNC] " + kMsg);
+
                             this.ExecuteCommand("procon.protected.send", "admin.kickPlayer", Name, mBouncerKickMessage);
                         } else {
                             debugWrite(dbgBouncer, "[BNC] Player " + Name + " found. Not Kicking.");
