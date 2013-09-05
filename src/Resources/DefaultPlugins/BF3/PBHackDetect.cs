@@ -58,8 +58,7 @@ namespace PRoConEvents
             NO_PBGUID,
             NO_IP_ADDRESS,
             PBGUID_INCORRECT_LENGTH,
-            PBGUID_INVALID,
-            BLANK_KILLER,
+            PBGUID_INVALID
         }
 
         private enum IntVariableName
@@ -129,7 +128,6 @@ namespace PRoConEvents
             stringSettings.Add(StringVariableName.NO_PBGUID, new Variable<string>("E-mail|No PBGUID message ({0} = player name, {1} = player GUID)", "{0} ({1}) has no PBGUID."));
             stringSettings.Add(StringVariableName.PBGUID_INCORRECT_LENGTH, new Variable<string>("E-mail|PBGUID is incorrect length message ({0} = player name, {1} = player GUID)", "{0} ({1}) has incorrect PBGUID length."));
             stringSettings.Add(StringVariableName.PBGUID_INVALID, new Variable<string>("E-mail|PBGUID is invalid message ({0} = player name, {1} = player GUID)", "{0} ({1}) has invalid PBGUID."));
-            stringSettings.Add(StringVariableName.BLANK_KILLER, new Variable<string>("E-mail|Blank killer message", "Blank killer detected."));
 
             intSettings = new Dictionary<IntVariableName, Variable<int>>();
             intSettings.Add(IntVariableName.SMTP_PORT, new Variable<int>("SMTP|Port", 587));
@@ -321,7 +319,7 @@ The second option is to kick based on the players Ping.  Two methods are avialab
 
         public void RemoveProtection(string strSoldierName)
         {
-            if (this.joinDelay.Contains(strSoldierName) == true)
+            if (this.joinDelay.Contains(strSoldierName))
             {
                 this.joinDelay.Remove(strSoldierName);
             }
@@ -329,12 +327,12 @@ The second option is to kick based on the players Ping.  Two methods are avialab
 
         public override void OnPlayerLeft(CPlayerInfo cpiPlayer)
         {
-            if (this.normalPlayer.ContainsKey(cpiPlayer.SoldierName) == true)
+            if (this.normalPlayer.ContainsKey(cpiPlayer.SoldierName))
             {
                 this.normalPlayer.Remove(cpiPlayer.SoldierName);
             }
 
-            if (this.punkbusterPlayer.ContainsKey(cpiPlayer.SoldierName) == true)
+            if (this.punkbusterPlayer.ContainsKey(cpiPlayer.SoldierName))
             {
                 this.punkbusterPlayer.Remove(cpiPlayer.SoldierName);
             }
@@ -365,7 +363,7 @@ The second option is to kick based on the players Ping.  Two methods are avialab
                     {
                         CPunkbusterInfo PBPlayer = this.punkbusterPlayer[killer.SoldierName];
 
-                        if (String.IsNullOrEmpty(PBPlayer.GUID) == true)
+                        if (String.IsNullOrEmpty(PBPlayer.GUID))
                         {
                             WriteLog(String.Format(stringSettings[StringVariableName.NO_PBGUID].Value, killer.SoldierName, killer.GUID));
                         }
@@ -380,7 +378,7 @@ The second option is to kick based on the players Ping.  Two methods are avialab
                             WriteLog(String.Format(stringSettings[StringVariableName.PBGUID_INVALID].Value, killer.SoldierName, killer.GUID));
                         }
 
-                        if (String.IsNullOrEmpty(PBPlayer.Ip) == true)
+                        if (String.IsNullOrEmpty(PBPlayer.Ip))
                         {
                             WriteLog(String.Format(stringSettings[StringVariableName.NO_IP_ADDRESS].Value, killer.SoldierName, killer.GUID));
                         }
@@ -390,10 +388,6 @@ The second option is to kick based on the players Ping.  Two methods are avialab
                         WriteLog(String.Format(stringSettings[StringVariableName.NO_PB_RECORD].Value, killer.SoldierName, killer.GUID));
                     }
                 }
-            }
-            else
-            {
-                WriteLog(stringSettings[StringVariableName.BLANK_KILLER].Value);
             }
         }
 
