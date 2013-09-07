@@ -25,7 +25,11 @@ using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Reflection;
+using System.Collections.Generic;
+using System.Data;
 using System.Text.RegularExpressions;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Xml;
 
@@ -37,8 +41,8 @@ using PRoCon.Core.Players.Items;
 using PRoCon.Core.Battlemap;
 using PRoCon.Core.Maps;
 
-namespace PRoConEvents
-{
+namespace PRoConEvents {
+
     using EventType = PRoCon.Core.Events.EventType;
     using CapturableEvent = PRoCon.Core.Events.CapturableEvents;
 
@@ -106,13 +110,16 @@ namespace PRoConEvents
 
         public Dictionary<String, CPlayerInfo> normalPlayer;
         private Dictionary<String, CPunkbusterInfo> punkbusterPlayer;
+        private Dictionary<String, int> kickPlayer;
         private List<String> joinDelay;
+        private enumBoolYesNo m_enableKick;
 
         public PBHackDetect()
         {
 
             this.normalPlayer = new Dictionary<String, CPlayerInfo>();
             this.punkbusterPlayer = new Dictionary<String, CPunkbusterInfo>();
+            this.kickPlayer = new Dictionary<String, int>();
             this.joinDelay = new List<String>();
             this.readySetGo = false;
 
@@ -135,30 +142,25 @@ namespace PRoConEvents
             boolSettings = new Dictionary<BoolVariableName, Variable<bool>>();
             boolSettings.Add(BoolVariableName.SMTP_SSL, new Variable<bool>("SMTP|Use SSL?", true));
         }
-
-        #region InitStuff
-        public string GetPluginName()
-        {
+        
+		#region InitStuff
+        public string GetPluginName() {
             return "PB Hack Logger";
         }
 
-        public string GetPluginVersion()
-        {
-            return "1.0.0.0";
+        public string GetPluginVersion() {
+            return "1.0.0.1";
         }
 
-        public string GetPluginAuthor()
-        {
+        public string GetPluginAuthor() {
             return "Zaeed";
         }
 
-        public string GetPluginWebsite()
-        {
+        public string GetPluginWebsite() {
             return "www.viridianphotos.com";
         }
 
-        public string GetPluginDescription()
-        {
+        public string GetPluginDescription() {
             return @"
 <p>If you find my plugins useful, please feel free to donate</p>
 <blockquote>
@@ -171,37 +173,30 @@ namespace PRoConEvents
 </blockquote>
 
 
-<h2>Description</h2>
-<p>The Latency Manager plugin gives you two options for removing players that might be causing lag on your server.  The first option is the Country Kicking method.  This allows you to either list countries that are not allowed on your server, or specify only the countrys allowed. 
-
-The second option is to kick based on the players Ping.  Two methods are avialable here; instant kick, and average based kick.  The averaging method samples the players ping over time, and then only kicks if their average ping is above the threshold.
-
-</p>
 ";
         }
 
-        public void OnPluginLoaded(string strHostName, string strPort, string strPRoConVersion)
-        {
+        public void OnPluginLoaded(string strHostName, string strPort, string strPRoConVersion) {
             this.strHostName = strHostName;
             this.strPort = strPort;
             this.strPRoConVersion = strPRoConVersion;
-            this.RegisterEvents(this.GetType().Name, "OnPunkbusterPlayerInfo", "OnPlayerLeft", "OnPlayerJoin", "OnPlayerAuthenticated", "OnListPlayers", "OnPlayerKilled");
+            this.RegisterEvents(this.GetType().Name, "OnPunkbusterPlayerInfo", "OnPlayerLeft", "OnPlayerJoin", "OnPlayerAuthenticated", "OnListPlayers", "OnPlayerKilled" );
         }
 
-        public void OnPluginEnable()
-        {
+        public void OnPluginEnable() {
             this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPB Hack Logger ^2Enabled!");
 
         }
 
-        public void OnPluginDisable()
-        {
-            this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPB Hack Logger ^1Disabled");
+        public void OnPluginDisable() {
+            this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPB Hack Logger ^1Disabled" );
+
         }
 
-        public List<CPluginVariable> GetDisplayPluginVariables()
-        {
+        public List<CPluginVariable> GetDisplayPluginVariables() {
+
             List<CPluginVariable> variables = new List<CPluginVariable>();
+            variables.Add(new CPluginVariable("Enable kicking after 10 flags", typeof(enumBoolYesNo), this.m_enableKick));
 
             foreach (StringVariableName name in stringSettings.Keys)
             {
@@ -223,13 +218,21 @@ The second option is to kick based on the players Ping.  Two methods are avialab
             return variables;
         }
 
-        public List<CPluginVariable> GetPluginVariables()
-        {
-            return GetDisplayPluginVariables();
+        public List<CPluginVariable> GetPluginVariables() {
+            
+            List<CPluginVariable> lstReturn = new List<CPluginVariable>();
+            lstReturn.Add(new CPluginVariable("Enable kicking after 10 flags", typeof(enumBoolYesNo), this.m_enableKick));
+
+            return lstReturn;
         }
 
-        public void SetPluginVariable(String strVariable, String strValue)
-        {
+        public void SetPluginVariable(string strVariable, string strValue) {
+
+            if (strVariable.CompareTo("Enable kicking after 10 flags") == 0 && Enum.IsDefined(typeof(enumBoolYesNo), strValue) == true)
+            {
+                this.m_enableKick = (enumBoolYesNo)Enum.Parse(typeof(enumBoolYesNo), strValue);
+            }
+
             foreach (StringVariableName name in stringSettings.Keys)
             {
                 Variable<string> v = stringSettings[name];
@@ -289,13 +292,13 @@ The second option is to kick based on the players Ping.  Two methods are avialab
                 }
             }
         }
-        #endregion
+		#endregion
 
         public override void OnPunkbusterPlayerInfo(CPunkbusterInfo cpbiPlayer)
         {
-            if (cpbiPlayer != null)
+			if (cpbiPlayer != null)
             {
-                if (!this.punkbusterPlayer.ContainsKey(cpbiPlayer.SoldierName))
+                if (this.punkbusterPlayer.ContainsKey(cpbiPlayer.SoldierName) == false)
                 {
                     this.punkbusterPlayer.Add(cpbiPlayer.SoldierName, cpbiPlayer);
                 }
@@ -303,13 +306,13 @@ The second option is to kick based on the players Ping.  Two methods are avialab
                 {
                     this.punkbusterPlayer[cpbiPlayer.SoldierName] = cpbiPlayer;
                 }
-                if (!readySetGo) { readySetGo = true; }
-            }
+                if (readySetGo == false) { readySetGo = true; }
+			}
         }
 
-        public override void OnPlayerJoin(string strSoldierName)
+        public override void OnPlayerJoin(string strSoldierName) 
         {
-            if (!this.normalPlayer.ContainsKey(strSoldierName))
+            if (this.normalPlayer.ContainsKey(strSoldierName) == false)
             {
                 this.normalPlayer.Add(strSoldierName, new CPlayerInfo(strSoldierName, "", 0, 24));
                 this.joinDelay.Add(strSoldierName);
@@ -319,76 +322,113 @@ The second option is to kick based on the players Ping.  Two methods are avialab
 
         public void RemoveProtection(string strSoldierName)
         {
-            if (this.joinDelay.Contains(strSoldierName))
+            if (this.joinDelay.Contains(strSoldierName) == true)
             {
                 this.joinDelay.Remove(strSoldierName);
             }
         }
 
         public override void OnPlayerLeft(CPlayerInfo cpiPlayer)
-        {
-            if (this.normalPlayer.ContainsKey(cpiPlayer.SoldierName))
-            {
-                this.normalPlayer.Remove(cpiPlayer.SoldierName);
-            }
+        { 
+             if (this.normalPlayer.ContainsKey(cpiPlayer.SoldierName) == true)
+                {
+                    this.normalPlayer.Remove(cpiPlayer.SoldierName);
+                }
 
-            if (this.punkbusterPlayer.ContainsKey(cpiPlayer.SoldierName))
-            {
-                this.punkbusterPlayer.Remove(cpiPlayer.SoldierName);
-            }
+             if (this.punkbusterPlayer.ContainsKey(cpiPlayer.SoldierName) == true)
+                {
+                    this.punkbusterPlayer.Remove(cpiPlayer.SoldierName);
+                }
+             if (this.kickPlayer.ContainsKey(cpiPlayer.SoldierName) == true)
+             {
+                 this.kickPlayer.Remove(cpiPlayer.SoldierName);
+             }
         }
 
-        //Do all our checks here
-        public override void OnPlayerKilled(Kill kKillerVictimDetails)
+        public void KickPlayer(string strSoldierName)
         {
-            if ((kKillerVictimDetails != null) && readySetGo)
+            if (this.m_enableKick == enumBoolYesNo.Yes)
             {
-                CPlayerInfo killer = kKillerVictimDetails.Killer;
-                if ((String.IsNullOrEmpty(killer.SoldierName)) || (this.joinDelay.Contains(killer.SoldierName)))
+                int kickFlags;
+                if (this.kickPlayer.ContainsKey(strSoldierName) == false)
                 {
-                    //	WriteLog("Killers name is blank.  They just killed " + kKillerVictimDetails.Victim.SoldierName);
+                    this.kickPlayer.Add(strSoldierName, 1);
                 }
                 else
                 {
-                    if (this.normalPlayer.ContainsKey(killer.SoldierName))
-                    {
-                        //Pass
-                    }
-                    else
-                    {
-                        WriteLog(String.Format(stringSettings[StringVariableName.NO_PB_RECORD].Value, killer.SoldierName, killer.GUID));
-                    }
+                    kickFlags = this.kickPlayer[strSoldierName];
+                    this.kickPlayer[strSoldierName] = kickFlags + 1;
+                }
 
-                    if (this.punkbusterPlayer.ContainsKey(killer.SoldierName))
-                    {
-                        CPunkbusterInfo PBPlayer = this.punkbusterPlayer[killer.SoldierName];
-
-                        if (String.IsNullOrEmpty(PBPlayer.GUID))
-                        {
-                            WriteLog(String.Format(stringSettings[StringVariableName.NO_PBGUID].Value, killer.SoldierName, killer.GUID));
-                        }
-
-                        if (PBPlayer.GUID.Length != 32)
-                        {
-                            WriteLog(String.Format(stringSettings[StringVariableName.PBGUID_INCORRECT_LENGTH].Value, killer.SoldierName, killer.GUID));
-                        }
-
-                        if (!(System.Text.RegularExpressions.Regex.IsMatch(PBPlayer.GUID, @"^[a-zA-Z0-9]+$")))
-                        {
-                            WriteLog(String.Format(stringSettings[StringVariableName.PBGUID_INVALID].Value, killer.SoldierName, killer.GUID));
-                        }
-
-                        if (String.IsNullOrEmpty(PBPlayer.Ip))
-                        {
-                            WriteLog(String.Format(stringSettings[StringVariableName.NO_IP_ADDRESS].Value, killer.SoldierName, killer.GUID));
-                        }
-                    }
-                    else
-                    {
-                        WriteLog(String.Format(stringSettings[StringVariableName.NO_PB_RECORD].Value, killer.SoldierName, killer.GUID));
-                    }
+                if (this.kickPlayer[strSoldierName] > 10)
+                {
+                    this.ExecuteCommand("procon.protected.send", "punkBuster.pb_sv_command", String.Format("pb_sv_kick \"{0}\" 0 \"{1}\"", strSoldierName, "PB Hack Detected"));
                 }
             }
+        }
+        //Do all our checks here
+        public override void OnPlayerKilled(Kill kKillerVictimDetails)
+        {
+            if (readySetGo)
+            {
+                if (kKillerVictimDetails != null)
+                {
+                    CPlayerInfo killer = kKillerVictimDetails.Killer;
+                    if ((String.IsNullOrEmpty(killer.SoldierName) == true) || (this.joinDelay.Contains(killer.SoldierName)))
+                    {
+                        //	WriteLog("Killers name is blank.  They just killed " + kKillerVictimDetails.Victim.SoldierName);
+                    }
+                    else
+                    {
+                        if (this.normalPlayer.ContainsKey(killer.SoldierName) == true)
+                        {
+                            //Pass
+                        }
+                        else
+                        {
+                            WriteLog(String.Format(stringSettings[StringVariableName.NO_PB_RECORD].Value, killer.SoldierName, killer.GUID));
+
+                        }
+
+                        if (this.punkbusterPlayer.ContainsKey(killer.SoldierName) == true)
+                        {
+                            CPunkbusterInfo PBPlayer = this.punkbusterPlayer[killer.SoldierName];
+                            if (String.IsNullOrEmpty(PBPlayer.GUID) == true)
+                            {
+                                WriteLog(String.Format(stringSettings[StringVariableName.NO_PBGUID].Value, killer.SoldierName, killer.GUID));
+                                KickPlayer(killer.SoldierName);
+                            }
+                            if (PBPlayer.GUID.Length != 32)
+                            {
+                                WriteLog(String.Format(stringSettings[StringVariableName.PBGUID_INCORRECT_LENGTH].Value, killer.SoldierName, killer.GUID)); 
+                                KickPlayer(killer.SoldierName);
+                            }
+
+                            if (!(System.Text.RegularExpressions.Regex.IsMatch(PBPlayer.GUID, @"^[a-zA-Z0-9]+$")))
+                            {
+                                WriteLog(String.Format(stringSettings[StringVariableName.PBGUID_INVALID].Value, killer.SoldierName, killer.GUID));
+                                KickPlayer(killer.SoldierName);
+                            }
+
+                            if (String.IsNullOrEmpty(PBPlayer.Ip) == true)
+                            {
+                                WriteLog(String.Format(stringSettings[StringVariableName.NO_IP_ADDRESS].Value, killer.SoldierName, killer.GUID));
+                                KickPlayer(killer.SoldierName);
+                            }
+                        }
+                        else
+                        {
+                            WriteLog(String.Format(stringSettings[StringVariableName.NO_PB_RECORD].Value, killer.SoldierName, killer.GUID));
+                            KickPlayer(killer.SoldierName);
+                        }
+                    }
+                }
+                else
+                {
+                    WriteLog("Blank killer detected");
+                }
+            }
+
         }
 
         public override void OnListPlayers(List<CPlayerInfo> lstPlayers, CPlayerSubset cpsSubset)
@@ -397,7 +437,7 @@ The second option is to kick based on the players Ping.  Two methods are avialab
             {
                 foreach (CPlayerInfo cpiPlayer in lstPlayers)
                 {
-                    if (this.normalPlayer.ContainsKey(cpiPlayer.SoldierName))
+                    if (this.normalPlayer.ContainsKey(cpiPlayer.SoldierName) == true)
                     {
                         this.normalPlayer[cpiPlayer.SoldierName] = cpiPlayer;
                     }
@@ -406,13 +446,18 @@ The second option is to kick based on the players Ping.  Two methods are avialab
                         this.normalPlayer.Add(cpiPlayer.SoldierName, cpiPlayer);
                     }
                 }
+
+                if (lstPlayers.Count == 0)
+                {
+                    this.normalPlayer.Clear();
+                    this.punkbusterPlayer.Clear();
+                    this.kickPlayer.Clear();
+                }
             }
         }
 
         public void WriteLog(string message)
         {
-            ConsoleWrite(message);
-
             string path = Environment.CurrentDirectory + "\\Plugins\\PBHackLog";
             try
             {
@@ -424,36 +469,36 @@ The second option is to kick based on the players Ping.  Two methods are avialab
                     DirectoryInfo di = Directory.CreateDirectory(path);
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
             }
-
             try
-            {
-                if (File.Exists(path + "\\PBHackLog.txt"))
                 {
-                    try
+                    if (File.Exists(path + "\\PBHackLog.txt"))
                     {
-                        using (System.IO.StreamWriter file = new System.IO.StreamWriter(path + "\\PBHackLog.txt", true))
+
+                        try
                         {
-                            file.WriteLine(message + Environment.NewLine);
+                            using (System.IO.StreamWriter file = new System.IO.StreamWriter(path + "\\PBHackLog.txt", true))
+                            {
+                                file.WriteLine(DateTime.Now.ToString() + "-" + this.strHostName + "-   " + message + Environment.NewLine);
+                    
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPBHackLog: Error appending " + e);
                         }
                     }
-                    catch (Exception e)
+                    else
                     {
-                        this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPBHackLog: Error appending " + e);
+                        System.IO.File.WriteAllText(path + "\\PBHackLog.txt", message);
                     }
                 }
-                else
+                catch (Exception d)
                 {
-                    System.IO.File.WriteAllText(path + "\\PBHackLog.txt", message);
+                    this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPBHackLog: Error creating new text file " + d);
                 }
-            }
-            catch (Exception d)
-            {
-                this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPBHackLog: Error creating new text file " + d);
-            }
-
             SendMail(message);
         }
 
@@ -553,4 +598,5 @@ The second option is to kick based on the players Ping.  Two methods are avialab
             ConsoleWrite(msg, MessageType.Exception);
         }
     }
+
 }
