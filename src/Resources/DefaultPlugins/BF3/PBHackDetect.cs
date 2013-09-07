@@ -492,7 +492,7 @@ namespace PRoConEvents {
                     }
                     else
                     {
-                        System.IO.File.WriteAllText(path + "\\PBHackLog.txt", message);
+                        System.IO.File.WriteAllText(path + "\\PBHackLog.txt", message + Environment.NewLine);
                     }
                 }
                 catch (Exception d)
