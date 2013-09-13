@@ -233,7 +233,7 @@ namespace PRoConEvents
             }
 
             foreach (StringVariableName name in stringSettings.Keys)
-                variables.Add(new CPluginVariable(v.Description, "string", stringSettings[name].Value));
+                variables.Add(new CPluginVariable(stringSettings[name].Description, "string", stringSettings[name].Value));
 
             foreach (IntVariableName name in intSettings.Keys)
                 variables.Add(new CPluginVariable(intSettings[name].Description, "int", string.Concat(intSettings[name].Value)));
