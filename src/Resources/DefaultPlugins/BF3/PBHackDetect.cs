@@ -519,7 +519,6 @@ namespace PRoConEvents
                             this.nameChangeChecker.Add(cpiPlayer.GUID, cpiPlayer.SoldierName);
                         }
                     }
-
                 }
 
                 //Do some cleanup of lists
@@ -545,6 +544,7 @@ namespace PRoConEvents
                     this.punkbusterPlayer.Clear();
                     this.kickPlayer.Clear();
                     this.nameChangeChecker.Clear();
+                    this.playerJoinTime.Clear();
                 }
             }
         }
