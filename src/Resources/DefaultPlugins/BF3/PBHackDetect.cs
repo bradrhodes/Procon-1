@@ -1,4 +1,4 @@
-/*  Copyright 2010 Zaeed (Matt Green)
+﻿/*  Copyright 2010 Zaeed (Matt Green)
 
     http://www.viridianphotos.com
 
@@ -25,11 +25,7 @@ using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Reflection;
-using System.Collections.Generic;
-using System.Data;
 using System.Text.RegularExpressions;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Xml;
 
@@ -41,7 +37,8 @@ using PRoCon.Core.Players.Items;
 using PRoCon.Core.Battlemap;
 using PRoCon.Core.Maps;
 
-namespace PRoConEvents {
+namespace PRoConEvents
+{
 
     using EventType = PRoCon.Core.Events.EventType;
     using CapturableEvent = PRoCon.Core.Events.CapturableEvents;
@@ -103,6 +100,8 @@ namespace PRoConEvents {
         private Dictionary<IntVariableName, Variable<int>> intSettings;
         private Dictionary<BoolVariableName, Variable<bool>> boolSettings;
 
+        private Dictionary<string, DateTime> playerJoinTime;
+
         private string strHostName;
         private string strPort;
         private string strPRoConVersion;
@@ -110,18 +109,32 @@ namespace PRoConEvents {
 
         public Dictionary<String, CPlayerInfo> normalPlayer;
         private Dictionary<String, CPunkbusterInfo> punkbusterPlayer;
+        private Dictionary<String, String> nameChangeChecker;
         private Dictionary<String, int> kickPlayer;
         private List<String> joinDelay;
-        private enumBoolYesNo m_enableKick;
+
+        private string m_PBHackAction;
+        private string m_NameHackAction;
+        private int m_iPBbanLength;
+        private int m_iNamebanLength;
+        private int m_iHitLimit;
 
         public PBHackDetect()
         {
-
             this.normalPlayer = new Dictionary<String, CPlayerInfo>();
             this.punkbusterPlayer = new Dictionary<String, CPunkbusterInfo>();
+            this.nameChangeChecker = new Dictionary<String, String>();
             this.kickPlayer = new Dictionary<String, int>();
             this.joinDelay = new List<String>();
             this.readySetGo = false;
+
+            this.m_PBHackAction = "None";
+            this.m_NameHackAction = "None";
+            this.m_iPBbanLength = 5;
+            this.m_iNamebanLength = 5;
+            this.m_iHitLimit = 10;
+
+            playerJoinTime = new Dictionary<string, DateTime>();
 
             stringSettings = new Dictionary<StringVariableName, Variable<string>>();
             stringSettings.Add(StringVariableName.SMTP_HOST, new Variable<string>("SMTP|Host", ""));
@@ -142,25 +155,30 @@ namespace PRoConEvents {
             boolSettings = new Dictionary<BoolVariableName, Variable<bool>>();
             boolSettings.Add(BoolVariableName.SMTP_SSL, new Variable<bool>("SMTP|Use SSL?", true));
         }
-        
-		#region InitStuff
-        public string GetPluginName() {
+
+        #region InitStuff
+        public string GetPluginName()
+        {
             return "PB Hack Logger";
         }
 
-        public string GetPluginVersion() {
-            return "1.0.0.1";
+        public string GetPluginVersion()
+        {
+            return "1.1.0.2";
         }
 
-        public string GetPluginAuthor() {
+        public string GetPluginAuthor()
+        {
             return "Zaeed";
         }
 
-        public string GetPluginWebsite() {
+        public string GetPluginWebsite()
+        {
             return "www.viridianphotos.com";
         }
 
-        public string GetPluginDescription() {
+        public string GetPluginDescription()
+        {
             return @"
 <p>If you find my plugins useful, please feel free to donate</p>
 <blockquote>
@@ -171,43 +189,51 @@ namespace PRoConEvents {
 <img alt="""" border=""0"" src=""https://www.paypal.com/en_AU/i/scr/pixel.gif"" width=""1"" height=""1"">
 </form>
 </blockquote>
-
-
 ";
         }
 
-        public void OnPluginLoaded(string strHostName, string strPort, string strPRoConVersion) {
+        public void OnPluginLoaded(string strHostName, string strPort, string strPRoConVersion)
+        {
             this.strHostName = strHostName;
             this.strPort = strPort;
             this.strPRoConVersion = strPRoConVersion;
-            this.RegisterEvents(this.GetType().Name, "OnPunkbusterPlayerInfo", "OnPlayerLeft", "OnPlayerJoin", "OnPlayerAuthenticated", "OnListPlayers", "OnPlayerKilled" );
+            this.RegisterEvents(this.GetType().Name, "OnPunkbusterPlayerInfo", "OnPlayerLeft", "OnPlayerJoin", "OnPlayerAuthenticated", "OnListPlayers", "OnPlayerKilled", "OnPlayerAuthenticated");
         }
 
-        public void OnPluginEnable() {
+        public void OnPluginEnable()
+        {
             this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPB Hack Logger ^2Enabled!");
-
+            this.ExecuteCommand("procon.protected.tasks.add", "RemoveFalsPositiveDelay", "180", "1", "1", "procon.protected.plugins.call", "PBHackDetect", "StartupDelayOver");
         }
 
-        public void OnPluginDisable() {
-            this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPB Hack Logger ^1Disabled" );
-
+        public void OnPluginDisable()
+        {
+            this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPB Hack Logger ^1Disabled");
         }
 
-        public List<CPluginVariable> GetDisplayPluginVariables() {
-
+        public List<CPluginVariable> GetDisplayPluginVariables()
+        {
             List<CPluginVariable> variables = new List<CPluginVariable>();
-            variables.Add(new CPluginVariable("Enable kicking after 10 flags", typeof(enumBoolYesNo), this.m_enableKick));
+
+            variables.Add(new CPluginVariable("PB Hack|Action after 10 PB Hack detections", "enum.enumPBHackAction(None|Kick|Temp Ban|Perm Ban)", this.m_PBHackAction));
+            if (String.Compare(this.m_PBHackAction, "Temp Ban") == 0)
+            {
+                variables.Add(new CPluginVariable("PB Hack|Ban length for PB Hack (mins)", this.m_iPBbanLength.GetType(), this.m_iPBbanLength));
+            }
+
+            if (String.Compare(this.m_PBHackAction, "None") != 0)
+            {
+                variables.Add(new CPluginVariable("PB Hack|PB Hack warnings before action taken", this.m_iHitLimit.GetType(), this.m_iHitLimit));
+            }
+
+            variables.Add(new CPluginVariable("Name Changing|Action when name change detected", "enum.enumNameHackAction(None|Kick|Temp Ban|Perm Ban)", this.m_NameHackAction));
+            if (String.Compare(this.m_NameHackAction, "Temp Ban") == 0)
+            {
+                variables.Add(new CPluginVariable("Name Changing|Ban length for name change (mins)", this.m_iNamebanLength.GetType(), this.m_iNamebanLength));
+            }
 
             foreach (StringVariableName name in stringSettings.Keys)
-            {
-                Variable<string> v = stringSettings[name];
-
-                string value = v.Value;
-                if (v.Description.ToLower().Contains("password"))
-                    value = Regex.Replace(value, ".", "*");
-
-                variables.Add(new CPluginVariable(v.Description, "string", value));
-            }
+                variables.Add(new CPluginVariable(v.Description, "string", stringSettings[name].Value));
 
             foreach (IntVariableName name in intSettings.Keys)
                 variables.Add(new CPluginVariable(intSettings[name].Description, "int", string.Concat(intSettings[name].Value)));
@@ -218,19 +244,49 @@ namespace PRoConEvents {
             return variables;
         }
 
-        public List<CPluginVariable> GetPluginVariables() {
-            
+        public List<CPluginVariable> GetPluginVariables()
+        {
             List<CPluginVariable> lstReturn = new List<CPluginVariable>();
-            lstReturn.Add(new CPluginVariable("Enable kicking after 10 flags", typeof(enumBoolYesNo), this.m_enableKick));
+
+            lstReturn.Add(new CPluginVariable("Action after 10 PB Hack detections", "enum.enumPBHackAction(None|Kick|Temp Ban|Perm Ban)", this.m_PBHackAction));
+            lstReturn.Add(new CPluginVariable("Ban length for PB Hack (mins)", this.m_iPBbanLength.GetType(), this.m_iPBbanLength));
+            lstReturn.Add(new CPluginVariable("PB Hack warnings before action taken", this.m_iHitLimit.GetType(), this.m_iHitLimit));
+            lstReturn.Add(new CPluginVariable("Action when name change detected", "enum.enumNameHackAction(None|Kick|Temp Ban|Perm Ban)", this.m_NameHackAction));
+            lstReturn.Add(new CPluginVariable("Ban length for name change (mins)", this.m_iNamebanLength.GetType(), this.m_iNamebanLength));
+
+            lstReturn.AddRange(GetDisplayPluginVariables());
 
             return lstReturn;
         }
 
-        public void SetPluginVariable(string strVariable, string strValue) {
+        public void SetPluginVariable(string strVariable, string strValue)
+        {
+            int intOut = 0;
 
-            if (strVariable.CompareTo("Enable kicking after 10 flags") == 0 && Enum.IsDefined(typeof(enumBoolYesNo), strValue) == true)
+            if (strVariable.CompareTo("Action after 10 PB Hack detections") == 0)
             {
-                this.m_enableKick = (enumBoolYesNo)Enum.Parse(typeof(enumBoolYesNo), strValue);
+                this.m_PBHackAction = strValue;
+                return;
+            }
+            else if (strVariable.CompareTo("Action when name change detected") == 0)
+            {
+                this.m_NameHackAction = strValue;
+                return;
+            }
+            else if (strVariable.CompareTo("Ban length for PB Hack (mins)") == 0 && int.TryParse(strValue, out intOut) == true)
+            {
+                this.m_iPBbanLength = intOut;
+                return;
+            }
+            else if (strVariable.CompareTo("Ban length for name change (mins)") == 0 && int.TryParse(strValue, out intOut) == true)
+            {
+                this.m_iNamebanLength = intOut;
+                return;
+            }
+            else if (strVariable.CompareTo("PB Hack warnings before action taken") == 0 && int.TryParse(strValue, out intOut) == true)
+            {
+                this.m_iHitLimit = intOut;
+                return;
             }
 
             foreach (StringVariableName name in stringSettings.Keys)
@@ -241,10 +297,7 @@ namespace PRoConEvents {
                 {
                     v.Value = strValue;
 
-                    if (v.Description.ToLower().Contains("password"))
-                        ConsoleWrite("Value for " + name + " changed.");
-                    else
-                        ConsoleWrite("Value for " + name + " changed to " + strValue);
+                    ConsoleWrite("Value for " + name + " changed to " + strValue);
 
                     return;
                 }
@@ -292,13 +345,13 @@ namespace PRoConEvents {
                 }
             }
         }
-		#endregion
+        #endregion
 
         public override void OnPunkbusterPlayerInfo(CPunkbusterInfo cpbiPlayer)
         {
-			if (cpbiPlayer != null)
+            if (cpbiPlayer != null)
             {
-                if (this.punkbusterPlayer.ContainsKey(cpbiPlayer.SoldierName) == false)
+                if (!this.punkbusterPlayer.ContainsKey(cpbiPlayer.SoldierName))
                 {
                     this.punkbusterPlayer.Add(cpbiPlayer.SoldierName, cpbiPlayer);
                 }
@@ -306,66 +359,68 @@ namespace PRoConEvents {
                 {
                     this.punkbusterPlayer[cpbiPlayer.SoldierName] = cpbiPlayer;
                 }
-                if (readySetGo == false) { readySetGo = true; }
-			}
+                
+                this.joinDelay.Remove(cpbiPlayer.SoldierName);
+
+                readySetGo = true;
+            }
         }
 
-        public override void OnPlayerJoin(string strSoldierName) 
+        public override void OnPlayerJoin(string strSoldierName)
         {
-            if (this.normalPlayer.ContainsKey(strSoldierName) == false)
+            if (!this.normalPlayer.ContainsKey(strSoldierName))
             {
+                this.playerJoinTime.Add(strSoldierName, DateTime.Now);
+
                 this.normalPlayer.Add(strSoldierName, new CPlayerInfo(strSoldierName, "", 0, 24));
                 this.joinDelay.Add(strSoldierName);
-                this.ExecuteCommand("procon.protected.tasks.add", "RemoveJoinDelayProtection", "60", "1", "1", "procon.protected.plugins.call", "PBHackDetect", "RemoveProtection", strSoldierName);
+                this.ExecuteCommand("procon.protected.tasks.add", "RemoveJoinDelayProtection", "180", "1", "1", "procon.protected.plugins.call", "PBHackDetect", "RemoveProtection", strSoldierName);
             }
         }
 
         public void RemoveProtection(string strSoldierName)
         {
-            if (this.joinDelay.Contains(strSoldierName) == true)
+            this.joinDelay.Remove(strSoldierName);
+        }
+
+        public void StartupDelayOver()
+        {
+            readySetGo = true;
+
+            this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPB Hack Logger ^2Now watching for hackers!");
+        }
+
+        public override void OnPlayerAuthenticated(string soldierName, string guid)
+        {
+            if (!this.nameChangeChecker.ContainsKey(guid))
             {
-                this.joinDelay.Remove(strSoldierName);
+                this.nameChangeChecker.Add(guid, soldierName);
             }
         }
 
         public override void OnPlayerLeft(CPlayerInfo cpiPlayer)
-        { 
-             if (this.normalPlayer.ContainsKey(cpiPlayer.SoldierName) == true)
-                {
-                    this.normalPlayer.Remove(cpiPlayer.SoldierName);
-                }
-
-             if (this.punkbusterPlayer.ContainsKey(cpiPlayer.SoldierName) == true)
-                {
-                    this.punkbusterPlayer.Remove(cpiPlayer.SoldierName);
-                }
-             if (this.kickPlayer.ContainsKey(cpiPlayer.SoldierName) == true)
-             {
-                 this.kickPlayer.Remove(cpiPlayer.SoldierName);
-             }
-        }
-
-        public void KickPlayer(string strSoldierName)
         {
-            if (this.m_enableKick == enumBoolYesNo.Yes)
-            {
-                int kickFlags;
-                if (this.kickPlayer.ContainsKey(strSoldierName) == false)
-                {
-                    this.kickPlayer.Add(strSoldierName, 1);
-                }
-                else
-                {
-                    kickFlags = this.kickPlayer[strSoldierName];
-                    this.kickPlayer[strSoldierName] = kickFlags + 1;
-                }
-
-                if (this.kickPlayer[strSoldierName] > 10)
-                {
-                    this.ExecuteCommand("procon.protected.send", "punkBuster.pb_sv_command", String.Format("pb_sv_kick \"{0}\" 0 \"{1}\"", strSoldierName, "PB Hack Detected"));
-                }
-            }
+            RemoveFromLists(cpiPlayer.SoldierName);
         }
+
+        public void RemoveFromLists(string strSoldierName)
+        {
+            this.normalPlayer.Remove(strSoldierName);
+
+            this.punkbusterPlayer.Remove(strSoldierName);
+
+            this.kickPlayer.Remove(strSoldierName);
+
+            this.nameChangeChecker.Remove(strSoldierName);
+
+            this.playerJoinTime.Remove(strSoldierName);
+        }
+
+        private string getTimeSpentOnServer(string playerName)
+        {
+            return " Player in server for " + (DateTime.Now - playerJoinTime[playerName]);
+        }
+
         //Do all our checks here
         public override void OnPlayerKilled(Kill kKillerVictimDetails)
         {
@@ -374,52 +429,51 @@ namespace PRoConEvents {
                 if (kKillerVictimDetails != null)
                 {
                     CPlayerInfo killer = kKillerVictimDetails.Killer;
-                    if ((String.IsNullOrEmpty(killer.SoldierName) == true) || (this.joinDelay.Contains(killer.SoldierName)))
+                    if ((String.IsNullOrEmpty(killer.SoldierName)) || (this.joinDelay.Contains(killer.SoldierName)))
                     {
                         //	WriteLog("Killers name is blank.  They just killed " + kKillerVictimDetails.Victim.SoldierName);
                     }
                     else
                     {
-                        if (this.normalPlayer.ContainsKey(killer.SoldierName) == true)
+                        if (this.normalPlayer.ContainsKey(killer.SoldierName))
                         {
                             //Pass
                         }
                         else
                         {
-                            WriteLog(String.Format(stringSettings[StringVariableName.NO_PB_RECORD].Value, killer.SoldierName, killer.GUID));
-
+                            WriteLog(String.Format(stringSettings[StringVariableName.NO_PB_RECORD].Value, killer.SoldierName, killer.GUID) + getTimeSpentOnServer(killer.SoldierName));
                         }
 
-                        if (this.punkbusterPlayer.ContainsKey(killer.SoldierName) == true)
+                        if (this.punkbusterPlayer.ContainsKey(killer.SoldierName))
                         {
                             CPunkbusterInfo PBPlayer = this.punkbusterPlayer[killer.SoldierName];
-                            if (String.IsNullOrEmpty(PBPlayer.GUID) == true)
+                            if (String.IsNullOrEmpty(PBPlayer.GUID))
                             {
-                                WriteLog(String.Format(stringSettings[StringVariableName.NO_PBGUID].Value, killer.SoldierName, killer.GUID));
-                                KickPlayer(killer.SoldierName);
+                                WriteLog(String.Format(stringSettings[StringVariableName.NO_PBGUID].Value, killer.SoldierName, killer.GUID) + getTimeSpentOnServer(killer.SoldierName));
+                                PBHackAction(killer.SoldierName, killer.GUID);
                             }
                             if (PBPlayer.GUID.Length != 32)
                             {
-                                WriteLog(String.Format(stringSettings[StringVariableName.PBGUID_INCORRECT_LENGTH].Value, killer.SoldierName, killer.GUID)); 
-                                KickPlayer(killer.SoldierName);
+                                WriteLog(String.Format(stringSettings[StringVariableName.PBGUID_INCORRECT_LENGTH].Value, killer.SoldierName, killer.GUID) + getTimeSpentOnServer(killer.SoldierName));
+                                PBHackAction(killer.SoldierName, killer.GUID);
                             }
 
                             if (!(System.Text.RegularExpressions.Regex.IsMatch(PBPlayer.GUID, @"^[a-zA-Z0-9]+$")))
                             {
-                                WriteLog(String.Format(stringSettings[StringVariableName.PBGUID_INVALID].Value, killer.SoldierName, killer.GUID));
-                                KickPlayer(killer.SoldierName);
+                                WriteLog(String.Format(stringSettings[StringVariableName.PBGUID_INVALID].Value, killer.SoldierName, killer.GUID) + getTimeSpentOnServer(killer.SoldierName));
+                                PBHackAction(killer.SoldierName, killer.GUID);
                             }
 
-                            if (String.IsNullOrEmpty(PBPlayer.Ip) == true)
+                            if (String.IsNullOrEmpty(PBPlayer.Ip))
                             {
-                                WriteLog(String.Format(stringSettings[StringVariableName.NO_IP_ADDRESS].Value, killer.SoldierName, killer.GUID));
-                                KickPlayer(killer.SoldierName);
+                                WriteLog(String.Format(stringSettings[StringVariableName.NO_IP_ADDRESS].Value, killer.SoldierName, killer.GUID) + getTimeSpentOnServer(killer.SoldierName));
+                                PBHackAction(killer.SoldierName, killer.GUID);
                             }
                         }
                         else
                         {
-                            WriteLog(String.Format(stringSettings[StringVariableName.NO_PB_RECORD].Value, killer.SoldierName, killer.GUID));
-                            KickPlayer(killer.SoldierName);
+                            WriteLog(String.Format(stringSettings[StringVariableName.NO_PB_RECORD].Value, killer.SoldierName, killer.GUID) + getTimeSpentOnServer(killer.SoldierName));
+                            PBHackAction(killer.SoldierName, killer.GUID);
                         }
                     }
                 }
@@ -428,7 +482,6 @@ namespace PRoConEvents {
                     WriteLog("Blank killer detected");
                 }
             }
-
         }
 
         public override void OnListPlayers(List<CPlayerInfo> lstPlayers, CPlayerSubset cpsSubset)
@@ -437,7 +490,7 @@ namespace PRoConEvents {
             {
                 foreach (CPlayerInfo cpiPlayer in lstPlayers)
                 {
-                    if (this.normalPlayer.ContainsKey(cpiPlayer.SoldierName) == true)
+                    if (this.normalPlayer.ContainsKey(cpiPlayer.SoldierName))
                     {
                         this.normalPlayer[cpiPlayer.SoldierName] = cpiPlayer;
                     }
@@ -445,13 +498,53 @@ namespace PRoConEvents {
                     {
                         this.normalPlayer.Add(cpiPlayer.SoldierName, cpiPlayer);
                     }
+
+                    //Check for changing names
+                    if (readySetGo)
+                    {
+                        if (this.nameChangeChecker.ContainsKey(cpiPlayer.GUID))
+                        {
+                            string value = "";
+                            if (this.nameChangeChecker.TryGetValue(cpiPlayer.GUID, out value))
+                            {
+                                if (value.CompareTo(cpiPlayer.SoldierName) != 0)
+                                {
+                                    WriteLog(cpiPlayer.SoldierName + "(" + cpiPlayer.GUID + ") name change hack detected.  Old value ( " + value + " )");
+                                    NameHackAction(cpiPlayer.SoldierName, cpiPlayer.GUID);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            this.nameChangeChecker.Add(cpiPlayer.GUID, cpiPlayer.SoldierName);
+                        }
+                    }
+
                 }
 
+                //Do some cleanup of lists
+                //Find any orphaned soldiers due to disconnects not caught by OnPlayerleft
+                List<string> orphanPlayers = new List<string>();
+                foreach (CPlayerInfo cpiPlayer in lstPlayers)
+                {
+                    orphanPlayers.Add(cpiPlayer.SoldierName);  //Convert lstPlayers into a list of strings cause i'm lazy
+                }
+
+                foreach (KeyValuePair<string, CPlayerInfo> pair in normalPlayer)
+                {
+                    if (!orphanPlayers.Contains(pair.Key))
+                    {
+                        RemoveFromLists(pair.Key);
+                    }
+                }
+
+                // Clear all lists just to be sure
                 if (lstPlayers.Count == 0)
                 {
                     this.normalPlayer.Clear();
                     this.punkbusterPlayer.Clear();
                     this.kickPlayer.Clear();
+                    this.nameChangeChecker.Clear();
                 }
             }
         }
@@ -469,37 +562,93 @@ namespace PRoConEvents {
                     DirectoryInfo di = Directory.CreateDirectory(path);
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
             }
-            try
-                {
-                    if (File.Exists(path + "\\PBHackLog.txt"))
-                    {
 
-                        try
-                        {
-                            using (System.IO.StreamWriter file = new System.IO.StreamWriter(path + "\\PBHackLog.txt", true))
-                            {
-                                file.WriteLine(DateTime.Now.ToString() + "-" + this.strHostName + "-   " + message + Environment.NewLine);
-                    
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPBHackLog: Error appending " + e);
-                        }
-                    }
-                    else
-                    {
-                        System.IO.File.WriteAllText(path + "\\PBHackLog.txt", message + Environment.NewLine);
-                    }
-                }
-                catch (Exception d)
+            try
+            {
+                if (File.Exists(path + "\\PBHackLog.txt"))
                 {
-                    this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPBHackLog: Error creating new text file " + d);
+
+                    try
+                    {
+                        using (System.IO.StreamWriter file = new System.IO.StreamWriter(path + "\\PBHackLog.txt", true))
+                        {
+                            file.WriteLine(DateTime.Now.ToString() + "-" + this.strHostName + "-   " + message + Environment.NewLine);
+
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPBHackLog: Error appending " + e);
+                    }
                 }
+                else
+                {
+                    System.IO.File.WriteAllText(path + "\\PBHackLog.txt", DateTime.Now.ToString() + "-" + this.strHostName + "-   " + message + Environment.NewLine);
+                }
+            }
+            catch (Exception d)
+            {
+                this.ExecuteCommand("procon.protected.pluginconsole.write", "^bPBHackLog: Error creating new text file " + d);
+            }
+
             SendMail(message);
+        }
+
+        public void NameHackAction(string strSoldierName, string strGUID)
+        {
+            switch (this.m_NameHackAction)
+            {
+                case "None":
+                    break;
+                case "Kick":
+                    this.ExecuteCommand("procon.protected.send", "punkBuster.pb_sv_command", String.Format("pb_sv_kick \"{0}\" 0 \"{1}\"", strSoldierName, "PB Hack Detected"));
+                    break;
+                case "Temp Ban":
+                    this.ExecuteCommand("procon.protected.send", "banList.add", "guid", strGUID, "seconds", (this.m_iNamebanLength * 60).ToString(), DateTime.Now.ToString() + " - Name Change Hack detected for " + strSoldierName);
+                    break;
+                case "Perm Ban":
+                    this.ExecuteCommand("procon.protected.send", "banList.add", "guid", strGUID, "perm", DateTime.Now.ToString() + " - Name Change Hack detected for " + strSoldierName);
+                    break;
+            }
+        }
+
+        public void PBHackAction(string strSoldierName, string strGUID)
+        {
+            if (this.m_PBHackAction.CompareTo("None") != 0)
+            {
+                int kickFlags;
+                if (!this.kickPlayer.ContainsKey(strSoldierName))
+                {
+                    this.kickPlayer.Add(strSoldierName, 1);
+                }
+                else
+                {
+                    kickFlags = this.kickPlayer[strSoldierName];
+                    this.kickPlayer[strSoldierName] = kickFlags + 1;
+                }
+
+                if (this.kickPlayer[strSoldierName] > this.m_iHitLimit)
+                {
+                    switch (this.m_NameHackAction)
+                    {
+                        case "None":
+                            break;
+                        case "Kick":
+                            this.ExecuteCommand("procon.protected.send", "punkBuster.pb_sv_command", String.Format("pb_sv_kick \"{0}\" 0 \"{1}\"", strSoldierName, "PB Hack Detected"));
+                            break;
+                        case "Temp Ban":
+                            this.ExecuteCommand("procon.protected.send", "banList.add", "guid", strGUID, "seconds", (this.m_iPBbanLength * 60).ToString(), DateTime.Now.ToString() + " - PB Hack detected for " + strSoldierName);
+                            break;
+                        case "Perm Ban":
+                            this.ExecuteCommand("procon.protected.send", "banList.add", "guid", strGUID, "perm", DateTime.Now.ToString() + " - PB Hack detected for " + strSoldierName);
+                            break;
+                    }
+
+                }
+            }
         }
 
         public bool SendMail(string body)
@@ -598,5 +747,4 @@ namespace PRoConEvents {
             ConsoleWrite(msg, MessageType.Exception);
         }
     }
-
 }
