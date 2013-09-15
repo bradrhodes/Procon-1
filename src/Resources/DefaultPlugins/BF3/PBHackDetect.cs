@@ -405,13 +405,14 @@ namespace PRoConEvents
 
         public void RemoveFromLists(string strSoldierName)
         {
+            if (this.normalPlayer.ContainsKey(strSoldierName))
+                this.nameChangeChecker.Remove(this.normalPlayer[strSoldierName].GUID);
+
             this.normalPlayer.Remove(strSoldierName);
 
             this.punkbusterPlayer.Remove(strSoldierName);
 
             this.kickPlayer.Remove(strSoldierName);
-
-            this.nameChangeChecker.Remove(strSoldierName);
 
             this.playerJoinTime.Remove(strSoldierName);
         }
