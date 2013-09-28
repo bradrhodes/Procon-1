@@ -1241,7 +1241,7 @@ namespace PRoConEvents
         /// <summary>Allows PRoCon to get the name of this plugin.</summary>
         public string GetPluginName() { return "Teamspeak 3 Sync"; }
         /// <summary>Allows PRoCon to get the version of this plugin.</summary>
-        public string GetPluginVersion() { return "1.0.0.0 PURE"; }
+        public string GetPluginVersion() { return "1.0.0.1 PURE"; }
         /// <summary>Allows PRoCon to get the author's name of this plugin.</summary>
         public string GetPluginAuthor() { return "Imisnew2"; }
         /// <summary>Allows PRoCon to get the website for this plugin.</summary>
@@ -2781,8 +2781,9 @@ namespace PRoConEvents
             // Move To Staging Channel If:
             //   Team Based swapping is off, or
             //   The number of players is lower than the team swapping threshold, or
-            //   Intermission swapping is on and the game is in intermission.
-            if (!synTeamBasedSwapping || getPlayersOnBothServers().Count < synTeamBasedThreshold || (synIntermissionSwapping && mBetweenRounds))
+            //   Intermission swapping is on and the game is in intermission or
+            //   Client is marked as SyntToStaging
+            if (!synTeamBasedSwapping || getPlayersOnBothServers().Count < synTeamBasedThreshold || (synIntermissionSwapping && mBetweenRounds) || client.IsSyncToStaging)
             {
                 // Don't move players from pickup channels to the staging channel.
                 foreach (TeamspeakChannel tsChannel in mPickupChannels)
@@ -3689,7 +3690,7 @@ namespace PRoConEvents
             }
 
         }
-        /// <summary>Sets the Sync to Staging flag for a player on the server.  This player will be kept in the staging channel until the next round or until the flag is reset. </summary>
+        /// <summary>Sets the Sync to Staging flag for a player on the server.  This player will be kept in the staging channel until the flag is reset. </summary>
         public void SetSyncToStagingFlagForPlayer(string playerName)
         {
             foreach (MasterClient user in mClientAllInfo)
@@ -3701,7 +3702,7 @@ namespace PRoConEvents
                     user.IsSyncToStaging = true;
                     sayToPlayer("Moving you to the TeamSpeak lobby.", user.GmClient.Name);
                     sayToPlayer("Type !tssync to re-enable squad sync.", user.GmClient.Name);
-                    sayToPlayer("Squad sync will automatically re-enable at round end.", user.GmClient.Name);
+                    sayToPlayer("Squad sync no longer automatically re-enables at round end.", user.GmClient.Name);
                     addToActionQueue(Commands.CheckClientForSwapping, user);
                     break;
                 }
