@@ -1921,7 +1921,7 @@ namespace PRoConEvents
             mBetweenRounds = true;
             if (mEnabled && !mTsReconnecting)
             {
-                addToActionQueue(Commands.ResetAllUsersSyncFlags);
+                //addToActionQueue(Commands.ResetAllUsersSyncFlags);
                 addToActionQueue(Commands.CheckAllClientsForSwapping);
             }
                 
