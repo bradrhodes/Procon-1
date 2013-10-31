@@ -40,7 +40,7 @@ namespace PRoConEvents
     /// the game server. Also allows 'Messages' to be sent to players who are not on
     /// your Teamspeak server, yet playing in your game server.
     /// </summary
-    class TeamspeakSync : CPRoConMarshalByRefObject, IPRoConPluginInterface
+    public class TeamspeakSync : PRoConPluginAPI, IPRoConPluginInterface
     {
         #region Teamspeak API
 
