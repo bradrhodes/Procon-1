@@ -39,8 +39,8 @@ namespace PRoConEvents
     /// Moves players between specified channels corresponding to their team/squad in
     /// the game server. Also allows 'Messages' to be sent to players who are not on
     /// your Teamspeak server, yet playing in your game server.
-    /// </summary
-    public class TeamspeakSync : PRoConPluginAPI, IPRoConPluginInterface
+    /// </summary>
+    class TeamspeakSync : PRoConPluginAPI, IPRoConPluginInterface
     {
         #region Teamspeak API
 
@@ -77,8 +77,8 @@ namespace PRoConEvents
             /// <summary>Creates a socket to be used for connecting to a Teamspeak server.</summary>
             public TeamspeakConnection()
             {
-                Socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                Socket.SendTimeout = 5000;
+                Socket                = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                Socket.SendTimeout    = 5000;
                 Socket.ReceiveTimeout = 5000;
             }
 
@@ -88,9 +88,9 @@ namespace PRoConEvents
             public TeamspeakResponse open(String ip, UInt16 port)
             {
                 // Error checking.
-                if (Socket.Connected) return TSR_OPEN_ERR_1;
+                if (Socket.Connected)         return TSR_OPEN_ERR_1;
                 if (String.IsNullOrEmpty(ip)) return TSR_OPEN_ERR_2;
-                if (port == 0) return TSR_OPEN_ERR_3;
+                if (port == 0)                return TSR_OPEN_ERR_3;
 
                 // Establish Connection.
                 String rBuffer = String.Empty;
@@ -119,8 +119,8 @@ namespace PRoConEvents
             public TeamspeakResponse close()
             {
                 Socket.Close();
-                Socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                Socket.SendTimeout = 5000;
+                Socket                = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                Socket.SendTimeout    = 5000;
                 Socket.ReceiveTimeout = 5000;
                 return TSR_OK;
             }
@@ -130,7 +130,7 @@ namespace PRoConEvents
             {
                 // Error Check.
                 if (!Socket.Connected) return TSR_SEND_ERR_1;
-                if (query == null) return TSR_SEND_ERR_2;
+                if (query == null)     return TSR_SEND_ERR_2;
 
                 String rBuffer = null;
                 Byte[] sBuffer = null;
@@ -164,33 +164,31 @@ namespace PRoConEvents
             }
 
             // For Teamspeak 3 Sync purposes only.
-            public delegate void DataHandler(String data);
-            public event DataHandler DataSent;
-            public event DataHandler DataReceived;
-            private void OnDataSent(String data)
-            {
+            public  delegate void DataHandler(String data);
+            public  event         DataHandler DataSent;
+            public  event         DataHandler DataReceived;
+            private void OnDataSent(String data) {
                 if (DataSent != null)
                     DataSent(data.Trim());
             }
-            private void OnDataReceived(String data)
-            {
+            private void OnDataReceived(String data) {
                 if (DataReceived != null)
                     DataReceived(data.Trim());
             }
         }
-
+        
         /// <summary>Parses all the information contained in a response from a Teamspeak 3 server.</summary>
         public class TeamspeakResponse
         {
             // -- Back-end storage for the response and sections.
-            private String tsRaw = null;
-            private TeamspeakResponseGroup tsError = null;
+            private String                         tsRaw      = null;
+            private TeamspeakResponseGroup         tsError    = null;
             private List<TeamspeakResponseSection> tsSections = null;
 
             // -- Accessors for the response.
-            public String RawResponse { get { return tsRaw; } }
-            public String Id { get { return tsError["id"]; } }
-            public String Message { get { return tsError["msg"]; } }
+            public String RawResponse  { get { return tsRaw; } }
+            public String Id           { get { return tsError["id"]; } }
+            public String Message      { get { return tsError["msg"]; } }
             public String ExtraMessage { get { return tsError["extra_msg"]; } }
 
             // -- Accessor and Qualifier for the sections.
@@ -206,8 +204,8 @@ namespace PRoConEvents
             private void parse(string raw)
             {
                 // Set Class Variables.
-                tsRaw = raw.Replace("\n", @"\n").Replace("\r", @"\r");
-                tsError = new TeamspeakResponseGroup("empty");
+                tsRaw      = raw.Replace("\n", @"\n").Replace("\r", @"\r");
+                tsError    = new TeamspeakResponseGroup("empty");
                 tsSections = new List<TeamspeakResponseSection>();
 
                 // Split the response up into sections and remove invalid lines.
@@ -223,7 +221,7 @@ namespace PRoConEvents
         public class TeamspeakResponseSection
         {
             // -- Back-end storage for the response and groups.
-            private String tsRaw = null;
+            private String                       tsRaw    = null;
             private List<TeamspeakResponseGroup> tsGroups = new List<TeamspeakResponseGroup>();
 
             // -- Accessors for the response.
@@ -242,7 +240,7 @@ namespace PRoConEvents
             private void parse(String raw)
             {
                 // Set Class Variables.
-                tsRaw = raw;
+                tsRaw    = raw;
                 tsGroups = new List<TeamspeakResponseGroup>();
 
                 // Split the section up into groups.
@@ -255,11 +253,11 @@ namespace PRoConEvents
         public class TeamspeakResponseGroup
         {
             // -- Back-end storage for the response and pairs.
-            private String tsRaw = null;
+            private String                     tsRaw   = null;
             private Dictionary<String, String> tsPairs = new Dictionary<String, String>();
 
             // -- Accessors for the response and pairs.
-            public String RawGroup { get { return tsRaw; } }
+            public String RawGroup         { get { return tsRaw; } }
             public String this[String key] { get { return (tsPairs.ContainsKey(key)) ? tsPairs[key] : null; } }
 
 
@@ -271,7 +269,7 @@ namespace PRoConEvents
             private void parse(String raw)
             {
                 // Set Class Variables.
-                tsRaw = raw;
+                tsRaw   = raw;
                 tsPairs = new Dictionary<String, String>();
 
                 // Split the group up into key/value pairs and discard invalid pairs.
@@ -282,12 +280,10 @@ namespace PRoConEvents
                         // This causes the program to crash.  To work around this, if a key is received
                         // twice, it simply stores the last value received.
                         String[] pair = element.Split('=');
-                        if (tsPairs.ContainsKey(pair[0]))
-                        {
+                        if (tsPairs.ContainsKey(pair[0])) {
                             tsPairs[pair[0]] = TeamspeakHelper.ts_UnescapeString(pair[1]);
                         }
-                        else
-                        {
+                        else {
                             tsPairs.Add(pair[0], TeamspeakHelper.ts_UnescapeString(pair[1]));
                         }
                     }
@@ -298,9 +294,9 @@ namespace PRoConEvents
         public class TeamspeakQuery
         {
             // -- Back-end storage for the command, parameters, and options.
-            private String tsCommand = null;
+            private String                     tsCommand    = null;
             private Dictionary<String, String> tsParameters = null;
-            private List<String> tsOptions = null;
+            private List<String>               tsOptions    = null;
 
             // -- Accessor for the command.
             public String Command { get { return tsCommand; } }
@@ -310,15 +306,15 @@ namespace PRoConEvents
             /// <summary>Creates a query using the specified command.</summary>
             public TeamspeakQuery(String command)
             {
-                tsCommand = command;
+                tsCommand    = command;
                 tsParameters = new Dictionary<String, String>();
-                tsOptions = new List<String>();
+                tsOptions    = new List<String>();
             }
 
             /// <summary>Adds a key/value pair to this query.</summary>
             public void addParameter(String key, String value)
             {
-                String tKey = key.Trim();
+                String tKey   = key.Trim();
                 String tValue = value.Trim();
                 if (!String.IsNullOrEmpty(tKey) && !String.IsNullOrEmpty(tValue))
                     if (!tsParameters.ContainsKey(tKey))
@@ -484,21 +480,21 @@ namespace PRoConEvents
 
             // Data received from a "serverlist" command
             //-- Identifying Data
-            public String tsName = null;  //virtualserver_name
-            public Int32? tsId = null;  //virtualserver_id
-            public Int32? tsPort = null;  //virtualserver_port
-            public Int32? tsMachineId = null;  //virtualserver_machine_id
+            public String tsName               = null;  //virtualserver_name
+            public Int32? tsId                 = null;  //virtualserver_id
+            public Int32? tsPort               = null;  //virtualserver_port
+            public Int32? tsMachineId          = null;  //virtualserver_machine_id
             //-- Status Data
-            public String tsStatus = null;  //virtualserver_status
-            public Int32? tsUpTime = null;  //virtualserver_uptime
-            public Int32? tsClientsOnline = null;  //virtualserver_clientsonline
+            public String tsStatus             = null;  //virtualserver_status
+            public Int32? tsUpTime             = null;  //virtualserver_uptime
+            public Int32? tsClientsOnline      = null;  //virtualserver_clientsonline
             public Int32? tsQueryClientsOnline = null;  //virtualserver_queryclientsonline
             //-- Misc Data
-            public Int32? tsQueryMaxClients = null;  //virtualserver_maxclients
-            public Boolean? tsAutoStart = null;  //virtualserver_autostart
+            public Int32?   tsQueryMaxClients  = null;  //virtualserver_maxclients
+            public Boolean? tsAutoStart        = null;  //virtualserver_autostart
 
             #endregion
-
+        
             /// <summary>Default constructor.</summary>
             public TeamspeakServer() { }
             /// <summary>Attempts to set all the data from the passed in response.</summary>
@@ -512,22 +508,22 @@ namespace PRoConEvents
             /// <param name="serverInfo">The server's information to set from.</param>
             public void setBasicData(TeamspeakResponseGroup serverInfo)
             {
-                String value;
-                Int32 iValue;
+                String  value;
+                Int32   iValue;
                 Boolean bValue;
 
                 tsName = serverInfo["virtualserver_name"];
-                if ((value = serverInfo["virtualserver_id"]) != null) if (Int32.TryParse(value, out iValue)) tsId = iValue; else tsId = null; else tsId = null;
-                if ((value = serverInfo["virtualserver_port"]) != null) if (Int32.TryParse(value, out iValue)) tsPort = iValue; else tsPort = null; else tsPort = null;
+                if ((value = serverInfo["virtualserver_id"])         != null) if (Int32.TryParse(value, out iValue)) tsId        = iValue; else tsId        = null; else tsId        = null;
+                if ((value = serverInfo["virtualserver_port"])       != null) if (Int32.TryParse(value, out iValue)) tsPort      = iValue; else tsPort      = null; else tsPort      = null;
                 if ((value = serverInfo["virtualserver_machine_id"]) != null) if (Int32.TryParse(value, out iValue)) tsMachineId = iValue; else tsMachineId = null; else tsMachineId = null;
 
                 tsStatus = serverInfo["virtualserver_status"];
-                if ((value = serverInfo["virtualserver_uptime"]) != null) if (Int32.TryParse(value, out iValue)) tsUpTime = iValue; else tsUpTime = null; else tsUpTime = null;
-                if ((value = serverInfo["virtualserver_clientsonline"]) != null) if (Int32.TryParse(value, out iValue)) tsClientsOnline = iValue; else tsClientsOnline = null; else tsClientsOnline = null;
+                if ((value = serverInfo["virtualserver_uptime"])             != null) if (Int32.TryParse(value, out iValue)) tsUpTime             = iValue; else tsUpTime             = null; else tsUpTime             = null;
+                if ((value = serverInfo["virtualserver_clientsonline"])      != null) if (Int32.TryParse(value, out iValue)) tsClientsOnline      = iValue; else tsClientsOnline      = null; else tsClientsOnline      = null;
                 if ((value = serverInfo["virtualserver_queryclientsonline"]) != null) if (Int32.TryParse(value, out iValue)) tsQueryClientsOnline = iValue; else tsQueryClientsOnline = null; else tsQueryClientsOnline = null;
 
-                if ((value = serverInfo["virtualserver_maxclients"]) != null) if (Int32.TryParse(value, out iValue)) tsQueryMaxClients = iValue; else tsQueryMaxClients = null; else tsQueryMaxClients = null;
-                if ((value = serverInfo["virtualserver_autostart"]) != null) if (Boolean.TryParse(value, out bValue)) tsAutoStart = bValue; else tsAutoStart = null; else tsAutoStart = null;
+                if ((value = serverInfo["virtualserver_maxclients"]) != null) if (Int32.TryParse(value, out iValue))   tsQueryMaxClients = iValue; else tsQueryMaxClients = null; else tsQueryMaxClients = null;
+                if ((value = serverInfo["virtualserver_autostart"])  != null) if (Boolean.TryParse(value, out bValue)) tsAutoStart       = bValue; else tsAutoStart       = null; else tsAutoStart       = null;
             }
         }
 
@@ -538,44 +534,44 @@ namespace PRoConEvents
 
             // Data received from a "channelfind" command
             public String tsName = null;  //channel_name
-            public Int32? tsId = null;  //cid
+            public Int32? tsId   = null;  //cid
 
             #endregion
             #region Medium Channel Data
 
             // Data received from a "channellist" command
-            public Int32? medPId = null;  //pid
-            public Int32? medOrder = null;  //channel_order
-            public Int32? medTotalClients = null;  //total_clients
+            public Int32? medPId              = null;  //pid
+            public Int32? medOrder            = null;  //channel_order
+            public Int32? medTotalClients     = null;  //total_clients
             public Int32? medPowerNeededToSub = null;  //channel_needed_subscribe_power
 
             #endregion
             #region Advanced Channel Data
 
             // Additional Data received from a "channelinfo" command
-            public String advTopic = null;  //channel_topic
-            public String advDescription = null;  //channel_description
-            public String advPassword = null;  //channel_password
-            public String advFilepath = null;  //channel_filepath
-            public String advPhoneticName = null;  //channel_name_phonetic
-            public Int32? advCodec = null;  //channel_codec
-            public Int32? advCodecQuality = null;  //channel_codec_quality
-            public Int32? advCodecLatencyFactor = null;  //channel_codec_latency_factor
-            public Int32? advMaxClients = null;  //channel_maxclients
-            public Int32? advMaxFamilyClients = null;  //channel_maxfamilyclients
-            public Int32? advNeededTalkPower = null;  //channel_needed_talk_power
-            public Int32? advIconId = null;  //channel_icon_id
-            public Boolean? advFlagPermanent = null;  //channel_flag_permanent
-            public Boolean? advFlagSemiPermanent = null;  //channel_flag_semi_permanent
-            public Boolean? advFlagDefault = null;  //channel_flag_default
-            public Boolean? advFlagPassword = null;  //channel_flag_password
-            public Boolean? advFlagMaxClientsUnlimited = null;  //channel_flag_maxclients_unlimited
+            public String   advTopic                         = null;  //channel_topic
+            public String   advDescription                   = null;  //channel_description
+            public String   advPassword                      = null;  //channel_password
+            public String   advFilepath                      = null;  //channel_filepath
+            public String   advPhoneticName                  = null;  //channel_name_phonetic
+            public Int32?   advCodec                         = null;  //channel_codec
+            public Int32?   advCodecQuality                  = null;  //channel_codec_quality
+            public Int32?   advCodecLatencyFactor            = null;  //channel_codec_latency_factor
+            public Int32?   advMaxClients                    = null;  //channel_maxclients
+            public Int32?   advMaxFamilyClients              = null;  //channel_maxfamilyclients
+            public Int32?   advNeededTalkPower               = null;  //channel_needed_talk_power
+            public Int32?   advIconId                        = null;  //channel_icon_id
+            public Boolean? advFlagPermanent                 = null;  //channel_flag_permanent
+            public Boolean? advFlagSemiPermanent             = null;  //channel_flag_semi_permanent
+            public Boolean? advFlagDefault                   = null;  //channel_flag_default
+            public Boolean? advFlagPassword                  = null;  //channel_flag_password
+            public Boolean? advFlagMaxClientsUnlimited       = null;  //channel_flag_maxclients_unlimited
             public Boolean? advFlagMaxFamilyClientsUnlimited = null;  //channel_flag_maxfamilyclients_unlimited
             public Boolean? advFlagMaxFamilyClientsInherited = null;  //channel_flag_maxfamilyclients_inherited
-            public Boolean? advForcedSilence = null;  //channel_forced_silence
+            public Boolean? advForcedSilence                 = null;  //channel_forced_silence
 
             #endregion
-
+        
             /// <summary>Default constructor.</summary>
             public TeamspeakChannel() { }
             /// <summary>Attempts to set all the data from the passed in response.</summary>
@@ -592,7 +588,7 @@ namespace PRoConEvents
             public void setBasicData(TeamspeakResponseGroup channelInfo)
             {
                 String value;
-                Int32 iValue;
+                Int32   iValue;
 
                 tsName = channelInfo["channel_name"];
                 if ((value = channelInfo["cid"]) != null) if (Int32.TryParse(value, out iValue)) tsId = iValue; else tsId = null; else tsId = null;
@@ -605,40 +601,40 @@ namespace PRoConEvents
                 String value;
                 Int32 iValue;
 
-                if ((value = channelInfo["pid"]) != null) if (Int32.TryParse(value, out iValue)) medPId = iValue; else medPId = null; else medPId = null;
-                if ((value = channelInfo["channel_order"]) != null) if (Int32.TryParse(value, out iValue)) medOrder = iValue; else medOrder = null; else medOrder = null;
-                if ((value = channelInfo["total_clients"]) != null) if (Int32.TryParse(value, out iValue)) medTotalClients = iValue; else medTotalClients = null; else medTotalClients = null;
+                if ((value = channelInfo["pid"])                            != null) if (Int32.TryParse(value, out iValue)) medPId              = iValue; else medPId              = null; else medPId              = null;
+                if ((value = channelInfo["channel_order"])                  != null) if (Int32.TryParse(value, out iValue)) medOrder            = iValue; else medOrder            = null; else medOrder            = null;
+                if ((value = channelInfo["total_clients"])                  != null) if (Int32.TryParse(value, out iValue)) medTotalClients     = iValue; else medTotalClients     = null; else medTotalClients     = null;
                 if ((value = channelInfo["channel_needed_subscribe_power"]) != null) if (Int32.TryParse(value, out iValue)) medPowerNeededToSub = iValue; else medPowerNeededToSub = null; else medPowerNeededToSub = null;
             }
-
+        
             /// <summary>Sets all the advanced data for a Teamspeak channel.</summary>
             /// <param name="channelInfo">The channel's information to set from.</param>
             public void setAdvancedData(TeamspeakResponseGroup channelInfo)
             {
                 String value;
-                Int32 iValue;
+                Int32   iValue;
                 Boolean bValue;
 
-                advTopic = channelInfo["channel_topic"];
-                advDescription = channelInfo["channel_description"];
-                advPassword = channelInfo["channel_password"];
-                advFilepath = channelInfo["channel_filepath"];
+                advTopic        = channelInfo["channel_topic"];
+                advDescription  = channelInfo["channel_description"];
+                advPassword     = channelInfo["channel_password"];
+                advFilepath     = channelInfo["channel_filepath"];
                 advPhoneticName = channelInfo["channel_name_phonetic"];
-                if ((value = channelInfo["channel_codec"]) != null) if (Int32.TryParse(value, out iValue)) advCodec = iValue; else advCodec = null; else advCodec = null;
-                if ((value = channelInfo["channel_codec_quality"]) != null) if (Int32.TryParse(value, out iValue)) advCodecQuality = iValue; else advCodecQuality = null; else advCodecQuality = null;
-                if ((value = channelInfo["channel_codec_latency_factor"]) != null) if (Int32.TryParse(value, out iValue)) advCodecLatencyFactor = iValue; else advCodecLatencyFactor = null; else advCodecLatencyFactor = null;
-                if ((value = channelInfo["channel_maxclients"]) != null) if (Int32.TryParse(value, out iValue)) advMaxClients = iValue; else advMaxClients = null; else advMaxClients = null;
-                if ((value = channelInfo["channel_maxfamilyclients"]) != null) if (Int32.TryParse(value, out iValue)) advMaxFamilyClients = iValue; else advMaxFamilyClients = null; else advMaxFamilyClients = null;
-                if ((value = channelInfo["channel_needed_talk_power"]) != null) if (Int32.TryParse(value, out iValue)) advNeededTalkPower = iValue; else advNeededTalkPower = null; else advNeededTalkPower = null;
-                if ((value = channelInfo["channel_icon_id"]) != null) if (Int32.TryParse(value, out iValue)) advIconId = iValue; else advIconId = null; else advIconId = null;
-                if ((value = channelInfo["channel_flag_permanent"]) != null) if (Boolean.TryParse(value, out bValue)) advFlagPermanent = bValue; else advFlagPermanent = null; else advFlagPermanent = null;
-                if ((value = channelInfo["channel_flag_semi_permanent"]) != null) if (Boolean.TryParse(value, out bValue)) advFlagSemiPermanent = bValue; else advFlagSemiPermanent = null; else advFlagSemiPermanent = null;
-                if ((value = channelInfo["channel_flag_default"]) != null) if (Boolean.TryParse(value, out bValue)) advFlagDefault = bValue; else advFlagDefault = null; else advFlagDefault = null;
-                if ((value = channelInfo["channel_flag_password"]) != null) if (Boolean.TryParse(value, out bValue)) advFlagPassword = bValue; else advFlagPassword = null; else advFlagPassword = null;
-                if ((value = channelInfo["channel_flag_maxclients_unlimited"]) != null) if (Boolean.TryParse(value, out bValue)) advFlagMaxClientsUnlimited = bValue; else advFlagMaxClientsUnlimited = null; else advFlagMaxClientsUnlimited = null;
+                if ((value = channelInfo["channel_codec"])                           != null) if (Int32.TryParse(value, out iValue))   advCodec                         = iValue; else advCodec                         = null; else advCodec                         = null;
+                if ((value = channelInfo["channel_codec_quality"])                   != null) if (Int32.TryParse(value, out iValue))   advCodecQuality                  = iValue; else advCodecQuality                  = null; else advCodecQuality                  = null;
+                if ((value = channelInfo["channel_codec_latency_factor"])            != null) if (Int32.TryParse(value, out iValue))   advCodecLatencyFactor            = iValue; else advCodecLatencyFactor            = null; else advCodecLatencyFactor            = null;
+                if ((value = channelInfo["channel_maxclients"])                      != null) if (Int32.TryParse(value, out iValue))   advMaxClients                    = iValue; else advMaxClients                    = null; else advMaxClients                    = null;
+                if ((value = channelInfo["channel_maxfamilyclients"])                != null) if (Int32.TryParse(value, out iValue))   advMaxFamilyClients              = iValue; else advMaxFamilyClients              = null; else advMaxFamilyClients              = null;
+                if ((value = channelInfo["channel_needed_talk_power"])               != null) if (Int32.TryParse(value, out iValue))   advNeededTalkPower               = iValue; else advNeededTalkPower               = null; else advNeededTalkPower               = null;
+                if ((value = channelInfo["channel_icon_id"])                         != null) if (Int32.TryParse(value, out iValue))   advIconId                        = iValue; else advIconId                        = null; else advIconId                        = null;
+                if ((value = channelInfo["channel_flag_permanent"])                  != null) if (Boolean.TryParse(value, out bValue)) advFlagPermanent                 = bValue; else advFlagPermanent                 = null; else advFlagPermanent                 = null;
+                if ((value = channelInfo["channel_flag_semi_permanent"])             != null) if (Boolean.TryParse(value, out bValue)) advFlagSemiPermanent             = bValue; else advFlagSemiPermanent             = null; else advFlagSemiPermanent             = null;
+                if ((value = channelInfo["channel_flag_default"])                    != null) if (Boolean.TryParse(value, out bValue)) advFlagDefault                   = bValue; else advFlagDefault                   = null; else advFlagDefault                   = null;
+                if ((value = channelInfo["channel_flag_password"])                   != null) if (Boolean.TryParse(value, out bValue)) advFlagPassword                  = bValue; else advFlagPassword                  = null; else advFlagPassword                  = null;
+                if ((value = channelInfo["channel_flag_maxclients_unlimited"])       != null) if (Boolean.TryParse(value, out bValue)) advFlagMaxClientsUnlimited       = bValue; else advFlagMaxClientsUnlimited       = null; else advFlagMaxClientsUnlimited       = null;
                 if ((value = channelInfo["channel_flag_maxfamilyclients_unlimited"]) != null) if (Boolean.TryParse(value, out bValue)) advFlagMaxFamilyClientsUnlimited = bValue; else advFlagMaxFamilyClientsUnlimited = null; else advFlagMaxFamilyClientsUnlimited = null;
                 if ((value = channelInfo["channel_flag_maxfamilyclients_inherited"]) != null) if (Boolean.TryParse(value, out bValue)) advFlagMaxFamilyClientsInherited = bValue; else advFlagMaxFamilyClientsInherited = null; else advFlagMaxFamilyClientsInherited = null;
-                if ((value = channelInfo["channel_forced_silence"]) != null) if (Boolean.TryParse(value, out bValue)) advForcedSilence = bValue; else advForcedSilence = null; else advForcedSilence = null;
+                if ((value = channelInfo["channel_forced_silence"])                  != null) if (Boolean.TryParse(value, out bValue)) advForcedSilence                 = bValue; else advForcedSilence                 = null; else advForcedSilence                 = null;
             }
         }
 
@@ -649,78 +645,78 @@ namespace PRoConEvents
 
             // Data received from a "clientfind" command
             public String tsName = null;  //client_nickname
-            public Int32? tsId = null;  //clid
+            public Int32? tsId   = null;  //clid
 
             #endregion
             #region Medium Client Data
 
             // Data received from a "clientlist" command
             public Int32? medDatabaseId = null;  //client_database_id
-            public Int32? medChannelId = null;  //cid
-            public Int32? medType = null;  //client_type
+            public Int32? medChannelId  = null;  //cid
+            public Int32? medType       = null;  //client_type
 
             #endregion
             #region Advanced Client Data
 
             // Additional Data received from a "clientinfo" command
             //-- Identifying Data
-            public String advLoginName = null;  //client_login_name
-            public String advUniqueId = null;  //client_unique_identifier
-            public String advIpAddress = null;  //connection_client_ip
+            public String advLoginName              = null;  //client_login_name
+            public String advUniqueId               = null;  //client_unique_identifier
+            public String advIpAddress              = null;  //connection_client_ip
             //-- Meta Data
-            public String advVersion = null;  //client_version
-            public String advPlatform = null;  //client_platform
-            public String advDescription = null;  //client_description
-            public String advCountry = null;  //client_country
-            public String advMetaData = null;  //client_meta_data
+            public String advVersion                = null;  //client_version
+            public String advPlatform               = null;  //client_platform
+            public String advDescription            = null;  //client_description
+            public String advCountry                = null;  //client_country
+            public String advMetaData               = null;  //client_meta_data
             //-- Permissions Data
-            public Int32? advChannelGroupId = null;  //client_channel_group_id
-            public Int32? advServerGroupId = null;  //client_servergroups
-            public Boolean? advIsChannelCommander = null;  //client_is_channel_commander
+            public Int32?   advChannelGroupId       = null;  //client_channel_group_id
+            public Int32?   advServerGroupId        = null;  //client_servergroups
+            public Boolean? advIsChannelCommander   = null;  //client_is_channel_commander
             //-- Server Statistics Data
-            public String advDefaultChannel = null;  //client_default_channel
-            public Int32? advConnectionTime = null;  //connection_connected_time
-            public Int32? advIdleTime = null;  //client_idle_time
-            public Int32? advCreationTime = null;  //client_created
-            public Int32? advLastConnected = null;  //client_lastconnected
-            public Int32? advTotalConnections = null;  //client_totalconnections
+            public String advDefaultChannel         = null;  //client_default_channel
+            public Int32? advConnectionTime         = null;  //connection_connected_time
+            public Int32? advIdleTime               = null;  //client_idle_time
+            public Int32? advCreationTime           = null;  //client_created
+            public Int32? advLastConnected          = null;  //client_lastconnected
+            public Int32? advTotalConnections       = null;  //client_totalconnections
             //-- Microphone Data
-            public Boolean? advInputMuted = null;  //client_input_muted
-            public Boolean? advOutputMuted = null;  //client_output_muted
-            public Boolean? advOutputMutedOnly = null;  //client_outputonly_muted
-            public Boolean? advInputHardware = null;  //client_input_hardware
-            public Boolean? advOutputHardware = null;  //client_output_hardware
-            public Boolean? advIsRecording = null;  //client_is_recording
+            public Boolean? advInputMuted           = null;  //client_input_muted
+            public Boolean? advOutputMuted          = null;  //client_output_muted
+            public Boolean? advOutputMutedOnly      = null;  //client_outputonly_muted
+            public Boolean? advInputHardware        = null;  //client_input_hardware
+            public Boolean? advOutputHardware       = null;  //client_output_hardware
+            public Boolean? advIsRecording          = null;  //client_is_recording
             //-- Misc Data
-            public String advFlagAvatar = null;  //client_flag_avatar
-            public String advAwayMessage = null;  //client_away_message
-            public String advTalkMessage = null;  //client_talk_request_msg
-            public String advPhoneticNick = null;  //client_nickname_phonetic
-            public String advDefaultToken = null;  //client_default_token
-            public String advBase64Hash = null;  //client_base64HashClientUID
-            public Int32? advTalkPower = null;  //client_talk_power
-            public Int32? advQueryViewPower = null;  //client_needed_serverquery_view_power
-            public Int32? advUnreadMessages = null;  //client_unread_messages
-            public Int32? advIconId = null;  //client_icon_id
-            public Boolean? advIsAway = null;  //client_away
-            public Boolean? advTalkRequest = null;  //client_talk_request
-            public Boolean? advIsTalker = null;  //client_is_talker
-            public Boolean? advIsPriority = null;  //client_is_priority_speaker
+            public String   advFlagAvatar           = null;  //client_flag_avatar
+            public String   advAwayMessage          = null;  //client_away_message
+            public String   advTalkMessage          = null;  //client_talk_request_msg
+            public String   advPhoneticNick         = null;  //client_nickname_phonetic
+            public String   advDefaultToken         = null;  //client_default_token
+            public String   advBase64Hash           = null;  //client_base64HashClientUID
+            public Int32?   advTalkPower            = null;  //client_talk_power
+            public Int32?   advQueryViewPower       = null;  //client_needed_serverquery_view_power
+            public Int32?   advUnreadMessages       = null;  //client_unread_messages
+            public Int32?   advIconId               = null;  //client_icon_id
+            public Boolean? advIsAway               = null;  //client_away
+            public Boolean? advTalkRequest          = null;  //client_talk_request
+            public Boolean? advIsTalker             = null;  //client_is_talker
+            public Boolean? advIsPriority           = null;  //client_is_priority_speaker
             //-- Bandwidth Data
-            public Int32? advBytesUpMonth = null;  //client_month_bytes_uploaded
-            public Int32? advBytesDownMonth = null;  //client_month_bytes_downloaded
-            public Int32? advBytesUpTotal = null;  //client_total_bytes_uploaded
-            public Int32? advBytesDownTotal = null;  //client_total_bytes_downloaded
-            public Int32? advFileBandwidthSent = null;  //connection_filetransfer_bandwidth_sent
-            public Int32? advFileBandwidthRec = null;  //connection_filetransfer_bandwidth_received
-            public Int32? advPacketsTotalSent = null;  //connection_packets_sent_total
-            public Int32? advPacketsTotalRec = null;  //connection_packets_received_total
-            public Int32? advBytesTotalSent = null;  //connection_bytes_sent_total
-            public Int32? advBytesTotalRec = null;  //connection_bytes_received_total
-            public Int32? advBndwdthSecondSent = null;  //connection_bandwidth_sent_last_second_total
-            public Int32? advBndwdthSecondRec = null;  //connection_bandwidth_received_last_second_total
-            public Int32? advBndwdthMinuteSent = null;  //connection_bandwidth_sent_last_minute_total
-            public Int32? advBndwdthMinuteRec = null;  //connection_bandwidth_received_last_minute_total
+            public Int32? advBytesUpMonth           = null;  //client_month_bytes_uploaded
+            public Int32? advBytesDownMonth         = null;  //client_month_bytes_downloaded
+            public Int32? advBytesUpTotal           = null;  //client_total_bytes_uploaded
+            public Int32? advBytesDownTotal         = null;  //client_total_bytes_downloaded
+            public Int32? advFileBandwidthSent      = null;  //connection_filetransfer_bandwidth_sent
+            public Int32? advFileBandwidthRec       = null;  //connection_filetransfer_bandwidth_received
+            public Int32? advPacketsTotalSent       = null;  //connection_packets_sent_total
+            public Int32? advPacketsTotalRec        = null;  //connection_packets_received_total
+            public Int32? advBytesTotalSent         = null;  //connection_bytes_sent_total
+            public Int32? advBytesTotalRec          = null;  //connection_bytes_received_total
+            public Int32? advBndwdthSecondSent      = null;  //connection_bandwidth_sent_last_second_total
+            public Int32? advBndwdthSecondRec       = null;  //connection_bandwidth_received_last_second_total
+            public Int32? advBndwdthMinuteSent      = null;  //connection_bandwidth_sent_last_minute_total
+            public Int32? advBndwdthMinuteRec       = null;  //connection_bandwidth_received_last_minute_total
 
             #endregion
 
@@ -740,7 +736,7 @@ namespace PRoConEvents
             public void setBasicData(TeamspeakResponseGroup clientInfo)
             {
                 String value;
-                Int32 iValue;
+                Int32  iValue;
 
                 tsName = clientInfo["client_nickname"];
                 if ((value = clientInfo["clid"]) != null) if (Int32.TryParse(value, out iValue)) tsId = iValue; else tsId = null; else tsId = null;
@@ -751,78 +747,78 @@ namespace PRoConEvents
             public void setMediumData(TeamspeakResponseGroup clientInfo)
             {
                 String value;
-                Int32 iValue;
+                Int32  iValue;
 
                 if ((value = clientInfo["client_database_id"]) != null) if (Int32.TryParse(value, out iValue)) medDatabaseId = iValue; else medDatabaseId = null; else medDatabaseId = null;
-                if ((value = clientInfo["cid"]) != null) if (Int32.TryParse(value, out iValue)) medChannelId = iValue; else medChannelId = null; else medChannelId = null;
-                if ((value = clientInfo["client_type"]) != null) if (Int32.TryParse(value, out iValue)) medType = iValue; else medType = null; else medType = null;
+                if ((value = clientInfo["cid"])                != null) if (Int32.TryParse(value, out iValue)) medChannelId  = iValue; else medChannelId  = null; else medChannelId  = null;
+                if ((value = clientInfo["client_type"])        != null) if (Int32.TryParse(value, out iValue)) medType       = iValue; else medType       = null; else medType       = null;
             }
 
             /// <summary>Sets all the advanced data for a Teamspeak client.</summary>
             /// <param name="clientInfo">The client's information to set from.</param>
             public void setAdvancedData(TeamspeakResponseGroup clientInfo)
             {
-                String value;
-                Int32 iValue;
+                String  value;
+                Int32   iValue;
                 Boolean bValue;
 
                 advLoginName = clientInfo["client_login_name"];
-                advUniqueId = clientInfo["client_unique_identifier"];
+                advUniqueId  = clientInfo["client_unique_identifier"];
                 advIpAddress = clientInfo["connection_client_ip"];
 
-                advVersion = clientInfo["client_version"];
-                advPlatform = clientInfo["client_platform"];
+                advVersion     = clientInfo["client_version"];
+                advPlatform    = clientInfo["client_platform"];
                 advDescription = clientInfo["client_description"];
-                advCountry = clientInfo["client_country"];
-                advMetaData = clientInfo["client_meta_data"];
+                advCountry     = clientInfo["client_country"];
+                advMetaData    = clientInfo["client_meta_data"];
 
-                if ((value = clientInfo["client_channel_group_id"]) != null) if (Int32.TryParse(value, out iValue)) advChannelGroupId = iValue; else advChannelGroupId = null; else advChannelGroupId = null;
-                if ((value = clientInfo["client_servergroups"]) != null) if (Int32.TryParse(value, out iValue)) advServerGroupId = iValue; else advServerGroupId = null; else advServerGroupId = null;
+                if ((value = clientInfo["client_channel_group_id"])     != null) if (Int32.TryParse(value, out iValue))   advChannelGroupId     = iValue; else advChannelGroupId     = null; else advChannelGroupId     = null;
+                if ((value = clientInfo["client_servergroups"])         != null) if (Int32.TryParse(value, out iValue))   advServerGroupId      = iValue; else advServerGroupId      = null; else advServerGroupId      = null;
                 if ((value = clientInfo["client_is_channel_commander"]) != null) if (Boolean.TryParse(value, out bValue)) advIsChannelCommander = bValue; else advIsChannelCommander = null; else advIsChannelCommander = null;
 
                 advDefaultChannel = clientInfo["client_default_channel"];
-                if ((value = clientInfo["connection_connected_time"]) != null) if (Int32.TryParse(value, out iValue)) advConnectionTime = iValue; else advConnectionTime = null; else advConnectionTime = null;
-                if ((value = clientInfo["client_idle_time"]) != null) if (Int32.TryParse(value, out iValue)) advIdleTime = iValue; else advIdleTime = null; else advIdleTime = null;
-                if ((value = clientInfo["client_created"]) != null) if (Int32.TryParse(value, out iValue)) advCreationTime = iValue; else advCreationTime = null; else advCreationTime = null;
-                if ((value = clientInfo["client_lastconnected"]) != null) if (Int32.TryParse(value, out iValue)) advLastConnected = iValue; else advLastConnected = null; else advLastConnected = null;
-                if ((value = clientInfo["client_totalconnections"]) != null) if (Int32.TryParse(value, out iValue)) advTotalConnections = iValue; else advTotalConnections = null; else advTotalConnections = null;
+                if ((value = clientInfo["connection_connected_time"]) != null) if (Int32.TryParse(value, out iValue)) advConnectionTime   = iValue; else advConnectionTime   = null; else advConnectionTime   = null;
+                if ((value = clientInfo["client_idle_time"])          != null) if (Int32.TryParse(value, out iValue)) advIdleTime         = iValue; else advIdleTime         = null; else advIdleTime         = null;
+                if ((value = clientInfo["client_created"])            != null) if (Int32.TryParse(value, out iValue)) advCreationTime     = iValue; else advCreationTime     = null; else advCreationTime     = null;
+                if ((value = clientInfo["client_lastconnected"])      != null) if (Int32.TryParse(value, out iValue)) advLastConnected    = iValue; else advLastConnected    = null; else advLastConnected    = null;
+                if ((value = clientInfo["client_totalconnections"])   != null) if (Int32.TryParse(value, out iValue)) advTotalConnections = iValue; else advTotalConnections = null; else advTotalConnections = null;
 
-                if ((value = clientInfo["client_input_muted"]) != null) if (Boolean.TryParse(value, out bValue)) advInputMuted = bValue; else advInputMuted = null; else advInputMuted = null;
-                if ((value = clientInfo["client_output_muted"]) != null) if (Boolean.TryParse(value, out bValue)) advOutputMuted = bValue; else advOutputMuted = null; else advOutputMuted = null;
+                if ((value = clientInfo["client_input_muted"])      != null) if (Boolean.TryParse(value, out bValue)) advInputMuted      = bValue; else advInputMuted      = null; else advInputMuted      = null;
+                if ((value = clientInfo["client_output_muted"])     != null) if (Boolean.TryParse(value, out bValue)) advOutputMuted     = bValue; else advOutputMuted     = null; else advOutputMuted     = null;
                 if ((value = clientInfo["client_outputonly_muted"]) != null) if (Boolean.TryParse(value, out bValue)) advOutputMutedOnly = bValue; else advOutputMutedOnly = null; else advOutputMutedOnly = null;
-                if ((value = clientInfo["client_input_hardware"]) != null) if (Boolean.TryParse(value, out bValue)) advInputHardware = bValue; else advInputHardware = null; else advInputHardware = null;
-                if ((value = clientInfo["client_output_hardware"]) != null) if (Boolean.TryParse(value, out bValue)) advOutputHardware = bValue; else advOutputHardware = null; else advOutputHardware = null;
-                if ((value = clientInfo["client_is_recording"]) != null) if (Boolean.TryParse(value, out bValue)) advIsRecording = bValue; else advIsRecording = null; else advIsRecording = null;
+                if ((value = clientInfo["client_input_hardware"])   != null) if (Boolean.TryParse(value, out bValue)) advInputHardware   = bValue; else advInputHardware   = null; else advInputHardware   = null;
+                if ((value = clientInfo["client_output_hardware"])  != null) if (Boolean.TryParse(value, out bValue)) advOutputHardware  = bValue; else advOutputHardware  = null; else advOutputHardware  = null;
+                if ((value = clientInfo["client_is_recording"])     != null) if (Boolean.TryParse(value, out bValue)) advIsRecording     = bValue; else advIsRecording     = null; else advIsRecording     = null;
 
-                advFlagAvatar = clientInfo["client_flag_avatar"];
-                advAwayMessage = clientInfo["client_away_message"];
-                advTalkMessage = clientInfo["client_talke_request_msg"];
+                advFlagAvatar   = clientInfo["client_flag_avatar"];
+                advAwayMessage  = clientInfo["client_away_message"];
+                advTalkMessage  = clientInfo["client_talke_request_msg"];
                 advPhoneticNick = clientInfo["client_nickname_phonetic"];
                 advDefaultToken = clientInfo["client_default_token"];
-                advBase64Hash = clientInfo["client_base64HashClientUID"];
-                if ((value = clientInfo["client_talk_power"]) != null) if (Int32.TryParse(value, out iValue)) advTalkPower = iValue; else advTalkPower = null; else advTalkPower = null;
-                if ((value = clientInfo["client_needed_serverquery_view_power"]) != null) if (Int32.TryParse(value, out iValue)) advQueryViewPower = iValue; else advQueryViewPower = null; else advQueryViewPower = null;
-                if ((value = clientInfo["client_unread_messages"]) != null) if (Int32.TryParse(value, out iValue)) advUnreadMessages = iValue; else advUnreadMessages = null; else advUnreadMessages = null;
-                if ((value = clientInfo["client_icon_id"]) != null) if (Int32.TryParse(value, out iValue)) advIconId = iValue; else advIconId = null; else advIconId = null;
-                if ((value = clientInfo["client_away"]) != null) if (Boolean.TryParse(value, out bValue)) advIsAway = bValue; else advIsAway = null; else advIsAway = null;
-                if ((value = clientInfo["client_talk_request"]) != null) if (Boolean.TryParse(value, out bValue)) advTalkRequest = bValue; else advTalkRequest = null; else advTalkRequest = null;
-                if ((value = clientInfo["client_is_talker"]) != null) if (Boolean.TryParse(value, out bValue)) advIsTalker = bValue; else advIsTalker = null; else advIsTalker = null;
-                if ((value = clientInfo["client_is_priority_speaker"]) != null) if (Boolean.TryParse(value, out bValue)) advIsPriority = bValue; else advIsPriority = null; else advIsPriority = null;
+                advBase64Hash   = clientInfo["client_base64HashClientUID"];
+                if ((value = clientInfo["client_talk_power"])                    != null) if (Int32.TryParse(value, out iValue))   advTalkPower      = iValue; else advTalkPower      = null; else advTalkPower      = null;
+                if ((value = clientInfo["client_needed_serverquery_view_power"]) != null) if (Int32.TryParse(value, out iValue))   advQueryViewPower = iValue; else advQueryViewPower = null; else advQueryViewPower = null;
+                if ((value = clientInfo["client_unread_messages"])               != null) if (Int32.TryParse(value, out iValue))   advUnreadMessages = iValue; else advUnreadMessages = null; else advUnreadMessages = null;
+                if ((value = clientInfo["client_icon_id"])                       != null) if (Int32.TryParse(value, out iValue))   advIconId         = iValue; else advIconId         = null; else advIconId         = null;
+                if ((value = clientInfo["client_away"])                          != null) if (Boolean.TryParse(value, out bValue)) advIsAway         = bValue; else advIsAway         = null; else advIsAway         = null;
+                if ((value = clientInfo["client_talk_request"])                  != null) if (Boolean.TryParse(value, out bValue)) advTalkRequest    = bValue; else advTalkRequest    = null; else advTalkRequest    = null;
+                if ((value = clientInfo["client_is_talker"])                     != null) if (Boolean.TryParse(value, out bValue)) advIsTalker       = bValue; else advIsTalker       = null; else advIsTalker       = null;
+                if ((value = clientInfo["client_is_priority_speaker"])           != null) if (Boolean.TryParse(value, out bValue)) advIsPriority     = bValue; else advIsPriority     = null; else advIsPriority     = null;
 
-                if ((value = clientInfo["client_month_bytes_uploaded"]) != null) if (Int32.TryParse(value, out iValue)) advBytesUpMonth = iValue; else advBytesUpMonth = null; else advBytesUpMonth = null;
-                if ((value = clientInfo["client_month_bytes_downloaded"]) != null) if (Int32.TryParse(value, out iValue)) advBytesDownMonth = iValue; else advBytesDownMonth = null; else advBytesDownMonth = null;
-                if ((value = clientInfo["client_total_bytes_uploaded"]) != null) if (Int32.TryParse(value, out iValue)) advBytesUpTotal = iValue; else advBytesUpTotal = null; else advBytesUpTotal = null;
-                if ((value = clientInfo["client_total_bytes_downloaded"]) != null) if (Int32.TryParse(value, out iValue)) advBytesDownTotal = iValue; else advBytesDownTotal = null; else advBytesDownTotal = null;
-                if ((value = clientInfo["connection_filetransfer_bandwidth_sent"]) != null) if (Int32.TryParse(value, out iValue)) advFileBandwidthSent = iValue; else advFileBandwidthSent = null; else advFileBandwidthSent = null;
-                if ((value = clientInfo["connection_filetransfer_bandwidth_received"]) != null) if (Int32.TryParse(value, out iValue)) advFileBandwidthRec = iValue; else advFileBandwidthRec = null; else advFileBandwidthRec = null;
-                if ((value = clientInfo["connection_packets_sent_total"]) != null) if (Int32.TryParse(value, out iValue)) advPacketsTotalSent = iValue; else advUnreadMessages = null; else advUnreadMessages = null;
-                if ((value = clientInfo["connection_packets_received_total"]) != null) if (Int32.TryParse(value, out iValue)) advPacketsTotalSent = iValue; else advPacketsTotalSent = null; else advPacketsTotalSent = null;
-                if ((value = clientInfo["connection_bytes_sent_total"]) != null) if (Int32.TryParse(value, out iValue)) advBytesTotalSent = iValue; else advBytesTotalSent = null; else advBytesTotalSent = null;
-                if ((value = clientInfo["connection_bytes_received_total"]) != null) if (Int32.TryParse(value, out iValue)) advBytesTotalRec = iValue; else advBytesTotalRec = null; else advBytesTotalRec = null;
-                if ((value = clientInfo["connection_bandwidth_sent_last_second_total"]) != null) if (Int32.TryParse(value, out iValue)) advBndwdthSecondSent = iValue; else advBndwdthSecondSent = null; else advBndwdthSecondSent = null;
-                if ((value = clientInfo["connection_bandwidth_received_last_second_total"]) != null) if (Int32.TryParse(value, out iValue)) advBndwdthSecondRec = iValue; else advBndwdthSecondRec = null; else advBndwdthSecondRec = null;
-                if ((value = clientInfo["connection_bandwidth_sent_last_minute_total"]) != null) if (Int32.TryParse(value, out iValue)) advBndwdthMinuteSent = iValue; else advBndwdthMinuteSent = null; else advBndwdthMinuteSent = null;
-                if ((value = clientInfo["connection_bandwidth_received_last_minute_total"]) != null) if (Int32.TryParse(value, out iValue)) advBndwdthMinuteRec = iValue; else advBndwdthMinuteRec = null; else advBndwdthMinuteRec = null;
+                if ((value = clientInfo["client_month_bytes_uploaded"])                     != null) if (Int32.TryParse(value, out iValue)) advBytesUpMonth     = iValue; else advBytesUpMonth       = null; else advBytesUpMonth      = null;
+                if ((value = clientInfo["client_month_bytes_downloaded"])                   != null) if (Int32.TryParse(value, out iValue)) advBytesDownMonth    = iValue; else advBytesDownMonth    = null; else advBytesDownMonth    = null;
+                if ((value = clientInfo["client_total_bytes_uploaded"])                     != null) if (Int32.TryParse(value, out iValue)) advBytesUpTotal      = iValue; else advBytesUpTotal      = null; else advBytesUpTotal      = null;
+                if ((value = clientInfo["client_total_bytes_downloaded"])                   != null) if (Int32.TryParse(value, out iValue)) advBytesDownTotal    = iValue; else advBytesDownTotal    = null; else advBytesDownTotal    = null;
+                if ((value = clientInfo["connection_filetransfer_bandwidth_sent"])          != null) if (Int32.TryParse(value, out iValue)) advFileBandwidthSent = iValue; else advFileBandwidthSent = null; else advFileBandwidthSent = null;
+                if ((value = clientInfo["connection_filetransfer_bandwidth_received"])      != null) if (Int32.TryParse(value, out iValue)) advFileBandwidthRec  = iValue; else advFileBandwidthRec  = null; else advFileBandwidthRec  = null;
+                if ((value = clientInfo["connection_packets_sent_total"])                   != null) if (Int32.TryParse(value, out iValue)) advPacketsTotalSent  = iValue; else advUnreadMessages    = null; else advUnreadMessages    = null;
+                if ((value = clientInfo["connection_packets_received_total"])               != null) if (Int32.TryParse(value, out iValue)) advPacketsTotalSent  = iValue; else advPacketsTotalSent  = null; else advPacketsTotalSent  = null;
+                if ((value = clientInfo["connection_bytes_sent_total"])                     != null) if (Int32.TryParse(value, out iValue)) advBytesTotalSent    = iValue; else advBytesTotalSent    = null; else advBytesTotalSent    = null;
+                if ((value = clientInfo["connection_bytes_received_total"])                 != null) if (Int32.TryParse(value, out iValue)) advBytesTotalRec     = iValue; else advBytesTotalRec     = null; else advBytesTotalRec     = null;
+                if ((value = clientInfo["connection_bandwidth_sent_last_second_total"])     != null) if (Int32.TryParse(value, out iValue)) advBndwdthSecondSent = iValue; else advBndwdthSecondSent = null; else advBndwdthSecondSent = null;
+                if ((value = clientInfo["connection_bandwidth_received_last_second_total"]) != null) if (Int32.TryParse(value, out iValue)) advBndwdthSecondRec  = iValue; else advBndwdthSecondRec  = null; else advBndwdthSecondRec  = null;
+                if ((value = clientInfo["connection_bandwidth_sent_last_minute_total"])     != null) if (Int32.TryParse(value, out iValue)) advBndwdthMinuteSent = iValue; else advBndwdthMinuteSent = null; else advBndwdthMinuteSent = null;
+                if ((value = clientInfo["connection_bandwidth_received_last_minute_total"]) != null) if (Int32.TryParse(value, out iValue)) advBndwdthMinuteRec  = iValue; else advBndwdthMinuteRec  = null; else advBndwdthMinuteRec  = null;
             }
         }
 
@@ -876,7 +872,22 @@ namespace PRoConEvents
         #endregion
 
         #endregion
+        
 
+
+        // For interop with other plugins.
+        public static List<TeamspeakSync> TsSync;
+        static TeamspeakSync()
+        {
+            TsSync = new List<TeamspeakSync>();
+        }
+
+        public String TsSyncKey;
+        public TeamspeakSync()
+        {
+            TsSyncKey = String.Empty;
+            TsSync.Add(this);
+        }
 
 
         // -- Section 1 - Teamspeak 3 -----------------------------------------
@@ -891,37 +902,37 @@ namespace PRoConEvents
         private String ts3DropoffChannelName = "Dropoff Channel Name";
         String[] ts3PckChannelNames = new String[] { };
         // -- Section 2 - Channels --------------------------------------------
-        String chnPassword = "L0cke9";
-        String[] chnTeamNames = new String[] { "TeamspeakSync Team 1", "TeamspeakSync Team 2", "TeamspeakSync Team 3", "TeamspeakSync Team 4" };
-        String[] chnSquadNames = new String[] { "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India", "Juliet", "Kilo", "Lima", "Mike", "November", "Oscar", "Papa", "Quebec", "Romeo", "Sierra", "Tango", "Uniform", "Victor", "Whiskey", "Xray", "Yankee", "Zulu", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Zero" };
-        Boolean chnRemoveOnEmpty = false;
+        String   chnPassword      = "L0cke9";
+        String[] chnTeamNames     = new String[] { "TeamspeakSync Team 1", "TeamspeakSync Team 2", "TeamspeakSync Team 3", "TeamspeakSync Team 4" };
+        String[] chnSquadNames    = new String[] { "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India", "Juliet", "Kilo", "Lima", "Mike", "November", "Oscar", "Papa", "Quebec", "Romeo", "Sierra", "Tango", "Uniform", "Victor", "Whiskey", "Xray", "Yankee", "Zulu", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Zero" };
+        Boolean  chnRemoveOnEmpty = false;
         // -- Section 3 - Synchronization -------------------------------------
-        Boolean synDelayQueries = false;
-        Int32 synDelayQueriesAmount = 700;
-        Int32 synUpdateInterval = 10000;
-        Boolean synTeamBasedSwapping = true;
-        Int32 synTeamBasedThreshold = 1;
-        Boolean synIntermissionSwapping = true;
-        Boolean synSquadBasedSwapping = false;
-        Int32 synSquadBasedThreshold = 8;
-        Int32 synSquadSizeMinimum = 2;
-        Double synMatchingThreshold = 100;
-        Boolean synRemoveClients = true;
+        Boolean  synDelayQueries           = false;
+        Int32    synDelayQueriesAmount     = 700;
+        Int32    synUpdateInterval         = 10000;
+        Boolean  synTeamBasedSwapping      = true;
+        Int32    synTeamBasedThreshold     = 1;
+        Boolean  synIntermissionSwapping   = true;
+        Boolean  synSquadBasedSwapping     = false;
+        Int32    synSquadBasedThreshold    = 8;
+        Int32    synSquadSizeMinimum       = 2;
+        Boolean  synRemoveClients          = true;
+        Double synMatchingThreshold        = 100;
         String[] synRemoveClientsWhitelist = new String[] { };
         // -- Section 4 - Error Handling --------------------------------------
-        Boolean errReconnectOnError = true;
-        Int32 errReconnectOnErrorAttempts = 20;
-        Int32 errReconnectOnErrorInterval = 30000;
+        Boolean errReconnectOnError         = true;
+        Int32   errReconnectOnErrorAttempts = 20;
+        Int32   errReconnectOnErrorInterval = 30000;
         // -- Section 5 - User Messages ---------------------------------------
-        Boolean msgEnabled = false;
-        Boolean msgOnJoin = false;
-        Int32 msgOnJoinDelay = 300000;
-        Int32 msgInterval = 1800000;
-        String msgMessage = "This server is using Teamspeak 3 Sync.";
-        Int32 msgDuration = 6;
+        Boolean msgEnabled     = false;
+        Boolean msgOnJoin      = false;
+        Int32   msgOnJoinDelay = 300000;
+        Int32   msgInterval    = 1800000;
+        String  msgMessage     = "This server is using Teamspeak 3 Sync.";
+        Int32   msgDuration    = 6;
         // -- Section 6 - Debug Information -----------------------------------
-        Boolean dbgEvents = false;
-        Boolean dbgClients = false;
+        Boolean dbgEvents   = false;
+        Boolean dbgClients  = false;
         Boolean dbgChannels = false;
         Boolean dbgSwapping = false;
         Boolean dbgNetwork = false;
@@ -929,8 +940,7 @@ namespace PRoConEvents
 
 
         // -- Command Enumerations --------------------------------------------
-        public enum Commands
-        {
+        public enum Commands {
             PluginEnabled,
             PluginDisabled,
 
@@ -959,8 +969,7 @@ namespace PRoConEvents
             SetSyncToStaging
         }
         // -- Error Enumerations ----------------------------------------------
-        public enum Queries
-        {
+        public enum Queries {
             OpenConnectionEstablish,
             OpenConnectionLogin,
             OpenConnectionUse,
@@ -988,25 +997,25 @@ namespace PRoConEvents
             RemoveChannelsSquadQuery
         }
         // -- Threading -------------------------------------------------------
-        Thread mThreadMain = null;
-        Thread mThreadMessage = null;
+        Thread mThreadMain        = null;
+        Thread mThreadMessage     = null;
         Thread mThreadSynchronize = null;
         // -- Actions ---------------------------------------------------------
-        Mutex mActionMutex = new Mutex();
-        Semaphore mActionSemaphore = new Semaphore(0, Int32.MaxValue);
-        Queue<ActionEvent> mActions = new Queue<ActionEvent>();
+        Mutex              mActionMutex     = new Mutex();
+        Semaphore          mActionSemaphore = new Semaphore(0, Int32.MaxValue);
+        Queue<ActionEvent> mActions         = new Queue<ActionEvent>();
         // -- Connection Handling ---------------------------------------------
-        TeamspeakConnection mTsConnection = new TeamspeakConnection();
-        TeamspeakResponse mTsResponse = new TeamspeakResponse("error id=0 msg=ok");
-        Boolean mTsReconnecting = false;
-        DateTime mTsPrevSendTime = DateTime.Now;
-        AutoResetEvent mTsReconnEvent = new AutoResetEvent(false);
+        TeamspeakConnection mTsConnection   = new TeamspeakConnection();
+        TeamspeakResponse   mTsResponse     = new TeamspeakResponse("error id=0 msg=ok");
+        Boolean             mTsReconnecting = false;
+        DateTime            mTsPrevSendTime = DateTime.Now;
+        AutoResetEvent      mTsReconnEvent  = new AutoResetEvent(false);
         // -- Client Information ----------------------------------------------
-        List<MasterClient> mClientAllInfo = new List<MasterClient>();
-        List<TeamspeakClient> mClientTsInfo = new List<TeamspeakClient>();
-        List<GameClient> mClientGmInfo = new List<GameClient>();
-        Dictionary<String, CPunkbusterInfo> mClientPbInfo = new Dictionary<String, CPunkbusterInfo>();
-        List<Int32> mClientWhitelist = new List<Int32>();
+        List<MasterClient>                  mClientAllInfo   = new List<MasterClient>();
+        List<TeamspeakClient>               mClientTsInfo    = new List<TeamspeakClient>();
+        List<GameClient>                    mClientGmInfo    = new List<GameClient>();
+        Dictionary<String, CPunkbusterInfo> mClientPbInfo    = new Dictionary<String, CPunkbusterInfo>();
+        List<Int32>                         mClientWhitelist = new List<Int32>();
         // -- Channel Information ---------------------------------------------
         TeamspeakChannel mStagingChannel = new TeamspeakChannel();
         TeamspeakChannel mDropoffChannel = new TeamspeakChannel();
@@ -1028,42 +1037,43 @@ namespace PRoConEvents
         Boolean mEnableBouncer = false;
         String mBouncerKickMessage = "Sorry, you must be on our TeamSpeak server to play here.";
 
+        
 
         /// <summary>Holds the player/punkbuster info combo from various games.</summary>
         public class GameClient
         {
             // [0] The player's general info (Teams/Squads).
             // [1] The player's punkbuster info (IPs).
-            private CPlayerInfo generalInfo = null;
+            private CPlayerInfo     generalInfo    = null;
             private CPunkbusterInfo punkbusterInfo = null;
 
             // Easy access to general info.
-            public String Name { get { return generalInfo.SoldierName; } }
-            public String Tags { get { return generalInfo.ClanTag; } }
-            public Int32 TeamId { get { return generalInfo.TeamID; } }
-            public Int32 SquadId { get { return generalInfo.SquadID; } }
-            public Int32 Score { get { return generalInfo.Score; } }
-            public Int32 Kills { get { return generalInfo.Kills; } }
-            public Int32 Deaths { get { return generalInfo.Deaths; } }
-            public Double KDR { get { return generalInfo.Kdr; } }
-            public Int32 Ping { get { return generalInfo.Ping; } }
-            public String GUID { get { return generalInfo.GUID; } }
+            public String Name    { get { return generalInfo.SoldierName; } }
+            public String Tags    { get { return generalInfo.ClanTag; } }
+            public Int32  TeamId  { get { return generalInfo.TeamID; } }
+            public Int32  SquadId { get { return generalInfo.SquadID; } }
+            public Int32  Score   { get { return generalInfo.Score; } }
+            public Int32  Kills   { get { return generalInfo.Kills; } }
+            public Int32  Deaths  { get { return generalInfo.Deaths; } }
+            public Double KDR     { get { return generalInfo.Kdr; } }
+            public Int32  Ping    { get { return generalInfo.Ping; } }
+            public String GUID    { get { return generalInfo.GUID; } }
             // Easy access to punkbuster info.
-            public String IP { get { if (punkbusterInfo != null) return punkbusterInfo.Ip; else return null; } }
-            public String SlotId { get { if (punkbusterInfo != null) return punkbusterInfo.SlotID; else return null; } }
-            public String Country { get { if (punkbusterInfo != null) return punkbusterInfo.PlayerCountry; else return null; } }
+            public String IP          { get { if (punkbusterInfo != null) return punkbusterInfo.Ip;                else return null; } }
+            public String SlotId      { get { if (punkbusterInfo != null) return punkbusterInfo.SlotID;            else return null; } }
+            public String Country     { get { if (punkbusterInfo != null) return punkbusterInfo.PlayerCountry;     else return null; } }
             public String CountryCode { get { if (punkbusterInfo != null) return punkbusterInfo.PlayerCountryCode; else return null; } }
             // Some extra helpers.
             /// <summary>Whether this client has punkbuster info initialized.</summary>
-            public Boolean HasPbInfo { get { return punkbusterInfo != null; } }
+            public Boolean         HasPbInfo         { get { return punkbusterInfo != null; } }
             /// <summary>Sets the general information.</summary>
-            public CPlayerInfo GeneralInfo { get { return generalInfo; } set { if (value != null) generalInfo = value; } }
+            public CPlayerInfo     GeneralInfo       { get { return generalInfo; }     set { if (value != null) generalInfo = value; } }
             /// <summary>Sets the punkbuster information.</summary>
-            public CPunkbusterInfo PunkbusterInfo { get { return punkbusterInfo; } set { if (value != null) punkbusterInfo = value; } }
+            public CPunkbusterInfo PunkbusterInfo    { get { return punkbusterInfo; }  set { if (value != null) punkbusterInfo = value; } }
 
             /// <summary>Creates the GameClient without a punkbuster info.</summary>
             /// <param name="genInfo">The player's general information.</param>
-            public GameClient(CPlayerInfo genInfo) { generalInfo = genInfo; }
+            public GameClient(CPlayerInfo genInfo)                         { generalInfo = genInfo; }
             /// <summary>Creates the GameClient with everything.</summary>
             /// <param name="genInfo">The player's general information.</param>
             /// <param name="pbInfo">The player's punkbuster information.</param>
@@ -1081,11 +1091,11 @@ namespace PRoConEvents
             private Boolean syncToTeam = false;
 
             /// <summary>Whether the master client has teamspeak information.</summary>
-            public Boolean HasTsClient { get { return tsClient != null; } }
+            public Boolean         HasTsClient { get { return tsClient != null; } }
             /// <summary>Whether the master client has game information.</summary>
-            public Boolean HasGmClient { get { return gmClient != null; } }
+            public Boolean         HasGmClient { get { return gmClient != null; } }
             /// <summary>Sets the teamspeak information.</summary>
-            public TeamspeakClient TsClient { get { return tsClient; } set { tsClient = value; } }
+            public TeamspeakClient TsClient    { get { return tsClient; } set { tsClient = value; } }
             /// <summary>Sets the game information</summary>
             public GameClient GmClient { get { return gmClient; } set { gmClient = value; } }
             // <summary>Specifies whether this client is has opted to exempt himself/herself from swapping.</summary>
@@ -1097,135 +1107,20 @@ namespace PRoConEvents
 
             /// <summary>Creates the MasterClient with teamspeak information.</summary>
             /// <param name="ts">The teamspeak information.</param>
-            public MasterClient(TeamspeakClient ts) { tsClient = ts; }
+            public MasterClient(TeamspeakClient ts)  { tsClient = ts; }
             /// <summary>Creates the MasterClient with game information.</summary>
             /// <param name="gm">The game information.</param>
-            public MasterClient(GameClient gm) { gmClient = gm; }
-
-            /// <summary>Calculates the percent match of a substring in another string. The shortest string is used as the substring.</summary>
-            /// <param name="s1">The first string.</param>
-            /// <param name="s2">The second string.</param>
-            /// <returns>The percent match.</returns>
-            public static Double calcPercentMatch(String s1, String s2)
-            {
-                // Variables
-                double max;
-                double min;
-                int levDist;
-
-                // Always use the longest string first (for Levinshtein Distance).
-                if (s1.Length >= s2.Length)
-                {
-                    max = s1.Length;
-                    min = s2.Length;
-                    levDist = calcLevenshteinDistance(s1, s2);
-                }
-                else
-                {
-                    max = s2.Length;
-                    min = s1.Length;
-                    levDist = calcLevenshteinDistance(s2, s1);
-                }
-
-                double percent = (max - levDist) / max;
-                double maxPossMatch = min / max;
-
-                // Calc percent to which the string matched.
-                // Calc largest possible match (i.e difference in length, if larger string contained exact substring match).
-                // Use relative match.
-                // Example:
-                //  Bob -> B0bWuzHere
-                //  Percent match:    (10 - 8) / 10 = 20%
-                //  Max poss match:   3 / 10        = 30%
-                //  Relative percent: 20% / 30%     = 66.6%
-                return (percent / maxPossMatch) * 100;
-
-                // Another Algorithm works as follows:
-                // Calc percent to which the string matched.
-                // Calc largest possible match (i.e difference in length, if larger string contained exact substring match).
-                // Assume 100% match, then remove the relative amount the strings didn't match.
-                // Example:
-                //  Bob -> B0bWuzHere
-                //  Percent match:  (10 - 8) / 10      = 20%
-                //  Max poss match: 3 / 10             = 30%
-                //  Assume 100%:    100% - (30% - 20%) = 90%
-                //return 100 - (maxPossMatch - percent) * 100;
-            }
-            /// <summary>Returns the number of changes needed to be made to the first string to turn it into the second string.</summary>
-            /// <param name="s1">The first string.  Note: This string needs to be the longer of the two.</param>
-            /// <param name="s2">The second string.  Note: This string needs to be the shorter of the two.</param>
-            /// <returns>The number of changes needed to be made to the first string.</returns>
-            public static Int32 calcLevenshteinDistance(String s1, String s2)
-            {
-                // [0] Length of S1.
-                // [1] Length of S2.
-                // [2] Where we're at in S1.
-                // [3] Where we're at in S2.
-                // [4] The Character at posS1 in S1.
-                // [5] The Character at posS2 in S2.
-                int lenS1, lenS2;
-                int posS1, posS2;
-                String chrS1, chrS2;
-
-                // Exit early if one is an empty string.
-                lenS1 = s1.Length;
-                lenS2 = s2.Length;
-                if (lenS1 == 0)
-                    return lenS2;
-                if (lenS2 == 0)
-                    return lenS1;
-
-                // Build a matrix.
-                // Fill first row with 0,1,2,3,4,5...
-                // Fill first column with 0,1,2,3,4,5...
-                int[][] matrix = new int[lenS1][];
-                for (int i = 0; i < lenS1; i++)
-                    matrix[i] = new int[lenS2];
-
-                for (int i = 0; i < lenS1; i++)
-                    matrix[i][0] = i;
-
-                for (int i = 0; i < lenS2; i++)
-                    matrix[0][i] = i;
-
-
-                // Start filling the matrix.
-                // For each character in the first string...
-                for (posS1 = 1; posS1 < lenS1; posS1++)
-                {
-                    chrS1 = s1.Substring(posS1, 1);
-
-                    // For each character in the second string...
-                    for (posS2 = 1; posS2 < lenS2; posS2++)
-                    {
-                        chrS2 = s2.Substring(posS2, 1);
-
-                        // Determine if they are equal.
-                        int cost = 0;
-                        if (chrS1 != chrS2)
-                            cost = 1;
-
-                        // Calculate which value should be put in this spot of the matrix.
-                        int val1 = matrix[posS1 - 1][posS2] + 1;
-                        int val2 = matrix[posS1][posS2 - 1] + 1;
-                        int val3 = matrix[posS1 - 1][posS2 - 1] + cost;
-                        matrix[posS1][posS2] = Math.Min(Math.Min(val1, val2), val3);
-                    }
-                }
-
-                // Return the number of additions/removals/changes it would take for the first string to match the second string.
-                return matrix[lenS1 - 1][lenS2 - 1];
-            }
+            public MasterClient(GameClient gm)       { gmClient = gm; }
         }
         /// <summary>Holds an action to perform along with it's arguments.</summary>
         public class ActionEvent
         {
-            private Commands command = 0;
-            private Int32 argsIndex = 0;
-            private List<Object> args = new List<Object>();
+            private Commands     command   = 0;
+            private Int32        argsIndex = 0;
+            private List<Object> args      = new List<Object>();
 
-            public Commands Command { get { return command; } }
-            public Object Argument { get { return args[(argsIndex == args.Count) ? (argsIndex = 1) - 1 : argsIndex++]; } }
+            public Commands Command  { get { return command; } }
+            public Object   Argument { get { return args[(argsIndex == args.Count) ? (argsIndex = 1) - 1 : argsIndex++]; } }
 
             /// <summary>Takes all the parameters for an event and creates them as neccesary.</summary>
             public ActionEvent(Commands command, Object[] args)
@@ -1241,7 +1136,7 @@ namespace PRoConEvents
         /// <summary>Allows PRoCon to get the name of this plugin.</summary>
         public string GetPluginName() { return "Teamspeak 3 Sync"; }
         /// <summary>Allows PRoCon to get the version of this plugin.</summary>
-        public string GetPluginVersion() { return "1.0.0.1 PURE"; }
+        public string GetPluginVersion() { return "1.0.2.2"; }
         /// <summary>Allows PRoCon to get the author's name of this plugin.</summary>
         public string GetPluginAuthor() { return "Imisnew2"; }
         /// <summary>Allows PRoCon to get the website for this plugin.</summary>
@@ -1534,51 +1429,47 @@ namespace PRoConEvents
             lstReturn.Add(new CPluginVariable("Section 1 - Teamspeak 3|Pickup Channel Names", typeof(String[]), ts3PckChannelNames));
 
             // -- Section 2 - Channels --------------------------------------------
-            lstReturn.Add(new CPluginVariable("Section 2 - Channels|Password", typeof(String), chnPassword));
-            lstReturn.Add(new CPluginVariable("Section 2 - Channels|Team Names", typeof(String[]), chnTeamNames));
-            lstReturn.Add(new CPluginVariable("Section 2 - Channels|Squad Names", typeof(String[]), chnSquadNames));
-            lstReturn.Add(new CPluginVariable("Section 2 - Channels|Remove When Empty", typeof(Boolean), chnRemoveOnEmpty));
-
+            lstReturn.Add(new CPluginVariable("Section 2 - Channels|Password",          typeof(String),   chnPassword));
+            lstReturn.Add(new CPluginVariable("Section 2 - Channels|Team Names",        typeof(String[]), chnTeamNames));
+            lstReturn.Add(new CPluginVariable("Section 2 - Channels|Squad Names",       typeof(String[]), chnSquadNames));
+            lstReturn.Add(new CPluginVariable("Section 2 - Channels|Remove When Empty", typeof(Boolean),  chnRemoveOnEmpty));
+            
             // -- Section 3 - Synchronization -------------------------------------
-            lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Delay Queries", typeof(Boolean), synDelayQueries));
+            lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Delay Queries",                  typeof(Boolean),  synDelayQueries));
             if (synDelayQueries)
-                lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Delay Queries Amount (ms)", typeof(Int32), synDelayQueriesAmount));
-            lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Update Interval (ms)", typeof(Int32), synUpdateInterval));
-            lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Team-Based Swapping", typeof(Boolean), synTeamBasedSwapping));
-            if (synTeamBasedSwapping)
-            {
-                lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Team-Based Threshold", typeof(Int32), synTeamBasedThreshold));
-                lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Intermission Swapping", typeof(Boolean), synIntermissionSwapping));
-                lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Squad-Based Swapping", typeof(Boolean), synSquadBasedSwapping));
-                if (synSquadBasedSwapping)
-                {
-                    lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Squad-Based Threshold", typeof(Int32), synSquadBasedThreshold));
-                    lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Squad-Size Minimum", typeof(Int32), synSquadSizeMinimum));
+                lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Delay Queries Amount (ms)",  typeof(Int32),    synDelayQueriesAmount));
+            lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Update Interval (ms)",           typeof(Int32),    synUpdateInterval));
+            lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Team-Based Swapping",            typeof(Boolean),  synTeamBasedSwapping));
+            if (synTeamBasedSwapping) {
+                lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Team-Based Threshold",       typeof(Int32),    synTeamBasedThreshold));
+                lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Intermission Swapping",      typeof(Boolean),  synIntermissionSwapping));
+                lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Squad-Based Swapping",       typeof(Boolean),  synSquadBasedSwapping));
+                if (synSquadBasedSwapping) {
+                    lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Squad-Based Threshold",  typeof(Int32), synSquadBasedThreshold));
+                    lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Squad-Size Minimum",     typeof(Int32), synSquadSizeMinimum));
                 }
             }
             // lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Matching Threshold (%)",         typeof(Double),  synMatchingThreshold));
-            lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Remove Clients Not Playing", typeof(Boolean), synRemoveClients));
+            lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Remove Clients Not Playing",     typeof(Boolean),  synRemoveClients));
             if (synRemoveClients)
                 lstReturn.Add(new CPluginVariable("Section 3 - Synchronization|Remove Clients - Whitelist", typeof(String[]), synRemoveClientsWhitelist));
 
             // -- Section 4 - Error Handling --------------------------------------
-            lstReturn.Add(new CPluginVariable("Section 4 - Error Handling|Reconnect On Error", typeof(Boolean), errReconnectOnError));
-            if (errReconnectOnError)
-            {
-                lstReturn.Add(new CPluginVariable("Section 4 - Error Handling|Number of Reconnect Attempts", typeof(Int32), errReconnectOnErrorAttempts));
-                lstReturn.Add(new CPluginVariable("Section 4 - Error Handling|Interval Between Reconnect Attempts (ms)", typeof(Int32), errReconnectOnErrorInterval));
+            lstReturn.Add(new CPluginVariable("Section 4 - Error Handling|Reconnect On Error",                           typeof(Boolean), errReconnectOnError));
+            if (errReconnectOnError) {
+                lstReturn.Add(new CPluginVariable("Section 4 - Error Handling|Number of Reconnect Attempts",             typeof(Int32),   errReconnectOnErrorAttempts));
+                lstReturn.Add(new CPluginVariable("Section 4 - Error Handling|Interval Between Reconnect Attempts (ms)", typeof(Int32),   errReconnectOnErrorInterval));
             }
-
+            
             // -- Section 5 - User Messages ---------------------------------------
-            lstReturn.Add(new CPluginVariable("Section 5 - User Messages|Message Players Not In Teamspeak", typeof(Boolean), msgEnabled));
-            if (msgEnabled)
-            {
-                lstReturn.Add(new CPluginVariable("Section 5 - User Messages|Message When Player Joins", typeof(Boolean), msgOnJoin));
+            lstReturn.Add(new CPluginVariable("Section 5 - User Messages|Message Players Not In Teamspeak",             typeof(Boolean), msgEnabled));
+            if (msgEnabled) {
+                lstReturn.Add(new CPluginVariable("Section 5 - User Messages|Message When Player Joins",                typeof(Boolean), msgOnJoin));
                 if (msgOnJoin)
-                    lstReturn.Add(new CPluginVariable("Section 5 - User Messages|Message When Player Joins Delay (ms)", typeof(Int32), msgOnJoinDelay));
-                lstReturn.Add(new CPluginVariable("Section 5 - User Messages|Message Interval (ms)", typeof(Int32), msgInterval));
-                lstReturn.Add(new CPluginVariable("Section 5 - User Messages|Message", typeof(String), msgMessage));
-                lstReturn.Add(new CPluginVariable("Section 5 - User Messages|Message Display Duration", typeof(Int32), msgDuration));
+                    lstReturn.Add(new CPluginVariable("Section 5 - User Messages|Message When Player Joins Delay (ms)", typeof(Int32),   msgOnJoinDelay));
+                lstReturn.Add(new CPluginVariable("Section 5 - User Messages|Message Interval (ms)",                    typeof(Int32),   msgInterval));
+                lstReturn.Add(new CPluginVariable("Section 5 - User Messages|Message",                                  typeof(String),  msgMessage));
+                lstReturn.Add(new CPluginVariable("Section 5 - User Messages|Message Display Duration",                 typeof(Int32),   msgDuration));
             }
             // -- Section 6 - Debug Information -----------------------------------
             lstReturn.Add(new CPluginVariable("Section 6 - In-Game Commands|Enable !tssquads",                       typeof(Boolean), mEnableTSSquadList));
@@ -1634,16 +1525,16 @@ namespace PRoConEvents
             lstReturn.Add(new CPluginVariable("Remove Clients Not Playing", typeof(Boolean), synRemoveClients));
             lstReturn.Add(new CPluginVariable("Remove Clients - Whitelist", typeof(String[]), synRemoveClientsWhitelist));
             // -- Section 4 - Error Handling --------------------------------------
-            lstReturn.Add(new CPluginVariable("Reconnect On Error", typeof(Boolean), errReconnectOnError));
-            lstReturn.Add(new CPluginVariable("Number of Reconnect Attempts", typeof(Int32), errReconnectOnErrorAttempts));
-            lstReturn.Add(new CPluginVariable("Interval Between Reconnect Attempts (ms)", typeof(Int32), errReconnectOnErrorInterval));
+            lstReturn.Add(new CPluginVariable("Reconnect On Error",                       typeof(Boolean), errReconnectOnError));
+            lstReturn.Add(new CPluginVariable("Number of Reconnect Attempts",             typeof(Int32),   errReconnectOnErrorAttempts));
+            lstReturn.Add(new CPluginVariable("Interval Between Reconnect Attempts (ms)", typeof(Int32),   errReconnectOnErrorInterval));
             // -- Section 5 - User Messages ---------------------------------------
-            lstReturn.Add(new CPluginVariable("Message Players Not In Teamspeak", typeof(Boolean), msgEnabled));
-            lstReturn.Add(new CPluginVariable("Message When Player Joins", typeof(Boolean), msgOnJoin));
-            lstReturn.Add(new CPluginVariable("Message When Player Joins Delay (ms)", typeof(Int32), msgOnJoinDelay));
-            lstReturn.Add(new CPluginVariable("Message Interval (ms)", typeof(Int32), msgInterval));
-            lstReturn.Add(new CPluginVariable("Message", typeof(String), msgMessage));
-            lstReturn.Add(new CPluginVariable("Message Display Duration", typeof(Int32), msgDuration));
+            lstReturn.Add(new CPluginVariable("Message Players Not In Teamspeak",     typeof(Boolean), msgEnabled));
+            lstReturn.Add(new CPluginVariable("Message When Player Joins",            typeof(Boolean), msgOnJoin));
+            lstReturn.Add(new CPluginVariable("Message When Player Joins Delay (ms)", typeof(Int32),   msgOnJoinDelay));
+            lstReturn.Add(new CPluginVariable("Message Interval (ms)",                typeof(Int32),   msgInterval));
+            lstReturn.Add(new CPluginVariable("Message",                              typeof(String),  msgMessage));
+            lstReturn.Add(new CPluginVariable("Message Display Duration",             typeof(Int32),   msgDuration));
             // -- Section 6 - Debug Information -----------------------------------
             lstReturn.Add(new CPluginVariable("Enable !tssquads", typeof(Boolean), mEnableTSSquadList));
             lstReturn.Add(new CPluginVariable("Enable !tslobby", typeof(Boolean), mEnableTSStaging));
@@ -1666,11 +1557,10 @@ namespace PRoConEvents
         public void SetPluginVariable(String strVariable, String strValue)
         {
             //Temporary out variable for TryParse methods.
-            UInt16 ushtOut = 0;
-            Int32 intOut = 0;
-            Double dblOut = 0;
-            Boolean blnOut = false;
-
+            UInt16  ushtOut = 0;
+            Int32   intOut  = 0;
+            Boolean blnOut  = false;
+            
             // -- Section 1 - Teamspeak 3 -----------------------------------------
             if (strVariable == "Server IP")
                 ts3ServerIp = strValue;
@@ -1722,12 +1612,9 @@ namespace PRoConEvents
                 synSquadBasedThreshold = (intOut >= 1 && intOut <= 32) ? intOut : synSquadBasedThreshold;
             else if (strVariable == "Squad-Size Minimum" && Int32.TryParse(strValue, out intOut))
                 synSquadSizeMinimum = (intOut >= 1 && intOut <= 6) ? intOut : synSquadSizeMinimum;
-            else if (strVariable == "Matching Threshold (%)" && Double.TryParse(strValue, out dblOut))
-                synMatchingThreshold = 100; //(dblOut >= 0.0 && dblOut <= 100.0) ? dblOut : synMatchingThreshold;
             else if (strVariable == "Remove Clients Not Playing" && Boolean.TryParse(strValue, out blnOut))
                 synRemoveClients = blnOut;
-            else if (strVariable == "Remove Clients - Whitelist")
-            {
+            else if (strVariable == "Remove Clients - Whitelist") {
                 mClientWhitelist.Clear();
                 synRemoveClientsWhitelist = CPluginVariable.DecodeStringArray(strValue);
                 foreach (String id in synRemoveClientsWhitelist)
@@ -1791,14 +1678,17 @@ namespace PRoConEvents
         /// <summary>Is called when the plugin is successfully loaded.</summary>
         public void OnPluginLoaded(String strHostName, String strPort, String strPRoConVersion)
         {
+            // For interop with other plugins.
+            TsSyncKey = String.Format("{0}:{1}", strHostName, strPort);
+
             // Register Events.
             this.RegisterEvents("OnPlayerJoin", "OnPlayerLeft", "OnPlayerSpawned", "OnPlayerTeamChange", "OnPlayerSquadChange", "OnListPlayers", "OnPunkbusterPlayerInfo", "OnLevelLoaded", "OnRoundOver", "OnGlobalChat", "OnTeamChat", "OnSquadChat");
 
             // Create thread so UI doesn't hang up on networking.
             try
             {
-                mThreadMain = new Thread(EntryMain);
-                mThreadMessage = new Thread(EntryMessaging);
+                mThreadMain        = new Thread(EntryMain);
+                mThreadMessage     = new Thread(EntryMessaging);
                 mThreadSynchronize = new Thread(EntrySynchronization);
                 mThreadMain.Start();
                 mThreadMessage.Start();
@@ -1829,23 +1719,19 @@ namespace PRoConEvents
 
 
         /// <summary>Code-driven enabling or disabling of the plugin.</summary>
-        public void setPluginState(Boolean state)
-        {
+        public void setPluginState(Boolean state) {
             if (!mTsReconnecting) this.ExecuteCommand("procon.protected.plugins.enable", "TeamspeakSync", state.ToString());
         }
         /// <summary>Writes a message to the console with the "Ts3 Sync:" prefix.</summary>
-        public void consoleWrite(String format, params Object[] args)
-        {
+        public void consoleWrite(String format, params Object[] args) {
             this.ExecuteCommand("procon.protected.pluginconsole.write", String.Format("Ts3 Sync: " + format, args));
         }
         /// <summary>Writes a message to the console with the "Ts3 Sync - Debug:" prefix.</summary>
-        public void debugWrite(Boolean debug, String format, params Object[] args)
-        {
+        public void debugWrite(Boolean debug, String format, params Object[] args) {
             if (debug) this.ExecuteCommand("procon.protected.pluginconsole.write", String.Format("^7Ts3 Sync (Debug): " + format, args));
         }
         /// <summary>Sends a full-screen message to a player in the game.</summary>
-        public void yellToPlayer(String message, Int32 duration, String player)
-        {
+        public void yellToPlayer(String message, Int32 duration, String player) {
             this.ExecuteCommand("procon.protected.send", "admin.yell", message, duration.ToString(), "player", player);
         }
         /// <summary>Sends a chat message to a player in the game.</summary>
@@ -1854,13 +1740,11 @@ namespace PRoConEvents
             this.ExecuteCommand("procon.protected.send", "admin.say", message, "player", player);
         }
         /// <summary>Requests an entire punkbuster list be sent.</summary>
-        public void forcePbListing()
-        {
+        public void forcePbListing() {
             this.ExecuteCommand("procon.protected.send", "punkBuster.pb_sv_command", "pb_sv_plist");
         }
         /// <summary>Requests an entire player list be sent.</summary>
-        public void forceGmListing()
-        {
+        public void forceGmListing() {
             this.ExecuteCommand("procon.protected.send", "admin.listPlayers", "all");
         }
 
@@ -1908,6 +1792,13 @@ namespace PRoConEvents
             if (mEnabled && !mTsReconnecting)
                 addToActionQueue(Commands.UpdatePbClientInfo, cpbiPlayer);
         }
+        /// <summary>Is called when the round is started (BFBC2).</summary>
+        public void OnLevelStarted()
+        {
+            mBetweenRounds = false;
+            if (mEnabled && !mTsReconnecting)
+                addToActionQueue(Commands.CheckAllClientsForSwapping);
+        }
         /// <summary>Is called when the round is started.</summary>
         public void OnLevelLoaded(String mapFileName, String Gamemode, Int32 roundsPlayed, Int32 roundsTotal)
         {
@@ -1920,11 +1811,7 @@ namespace PRoConEvents
         {
             mBetweenRounds = true;
             if (mEnabled && !mTsReconnecting)
-            {
-                //addToActionQueue(Commands.ResetAllUsersSyncFlags);
                 addToActionQueue(Commands.CheckAllClientsForSwapping);
-            }
-                
         }
         /// <summary>Used to handle the in-game control commands. </summary>
         public void OnGlobalChat(string speaker, string message)
@@ -1978,7 +1865,7 @@ namespace PRoConEvents
         /// <param name="data">The raw data that was received.</param>
         public void DataReceived(String data)
         {
-            foreach (String line in data.Replace("\r", "").Split('\n'))
+            foreach (String line in data.Replace("\r","").Split('\n'))
                 debugWrite(dbgNetwork, "[DataReceived] {0}", line);
         }
         /// <summary>Is called by a timer.  Assumes top of queue is timer that called method.</summary>
@@ -1995,7 +1882,7 @@ namespace PRoConEvents
         public void EntryMain()
         {
             // Register for events regarding logging for protocol level stuffs.
-            mTsConnection.DataSent += DataSent;
+            mTsConnection.DataSent     += DataSent;
             mTsConnection.DataReceived += DataReceived;
 
             // Loop Indefinately
@@ -2012,8 +1899,7 @@ namespace PRoConEvents
                     continue;
 
                 // Perform the specific command.
-                try
-                {
+                try {
                     switch (mCurrentAction.Command)
                     {
                         case Commands.PluginEnabled:
@@ -2024,7 +1910,7 @@ namespace PRoConEvents
                             debugWrite(dbgEvents, "[Event] Processing Plugin Disabled Event.");
                             performCloseConnection();
                             break;
-
+                
                         case Commands.UpdateTsClientInfo:
                             debugWrite(dbgEvents, "[Event] Processing Update Teamspeak Information Event.");
                             updateTsInfo();
@@ -2041,7 +1927,7 @@ namespace PRoConEvents
                             debugWrite(dbgEvents, "[Event] Processing Update Master Information Event.");
                             updateMasterInfo();
                             break;
-
+                        
                         case Commands.CheckAllClientsForSwapping:
                             debugWrite(dbgEvents, "[Event] Processing Swap ALL Clients Event.");
                             foreach (MasterClient mstClient in getPlayersOnBothServers())
@@ -2073,8 +1959,7 @@ namespace PRoConEvents
                             debugWrite(dbgEvents, "[Event] Processing Messaging On Join Event.");
                             String Name = (String)mCurrentAction.Argument;
                             foreach (MasterClient mstClient in getPlayersOnBcOnly())
-                                if (mstClient.GmClient.Name == Name)
-                                {
+                                if (mstClient.GmClient.Name == Name) {
                                     checkClientForMessage(mstClient);
                                     break;
                                 }
@@ -2149,8 +2034,7 @@ namespace PRoConEvents
         public void EntryMessaging()
         {
             // Loop Indefinately
-            while (true)
-            {
+            while (true) {
                 if (mEnabled && !mTsReconnecting && msgEnabled) addToActionQueue(Commands.CheckAllClientsForMessaging);
                 Thread.Sleep(msgInterval);
             }
@@ -2159,10 +2043,8 @@ namespace PRoConEvents
         public void EntrySynchronization()
         {
             // Loop Indefinately
-            while (true)
-            {
-                if (mEnabled && !mTsReconnecting)
-                {
+            while (true) {
+                if (mEnabled && !mTsReconnecting) {
                     addToActionQueue(Commands.UpdateTsClientInfo);
                     addToActionQueue(Commands.UpdateMsClientInfo);
                     addToActionQueue(Commands.CheckAllClientsForSwapping);
@@ -2228,8 +2110,7 @@ namespace PRoConEvents
                     tsChannels.Add(new TeamspeakChannel(tsResponseGroup));
             foreach (TeamspeakChannel tsChannel in tsChannels)
                 foreach (String tsName in ts3PckChannelNames)
-                    if (tsChannel.tsName == tsName)
-                    {
+                    if (tsChannel.tsName == tsName) {
                         mPickupChannels.Add(tsChannel);
                         consoleWrite("[Connection] ^2Found ^bPickup^n Channel: {0} ({1}).", tsChannel.tsName, tsChannel.tsId);
                         break;
@@ -2237,8 +2118,7 @@ namespace PRoConEvents
             foreach (TeamspeakChannel tsChannel in tsChannels)
                 if (tsChannel.medPId == 0 || tsChannel.medPId == mStagingChannel.tsId)
                     for (int i = 0; i < chnTeamNames.Length; i++)
-                        if (!mTeamChannels.ContainsKey(i + 1) && tsChannel.tsName == chnTeamNames[i])
-                        {
+                        if (!mTeamChannels.ContainsKey(i + 1) && tsChannel.tsName == chnTeamNames[i]) {
                             mTeamChannels.Add(i + 1, tsChannel);
                             mSquadChannels.Add(i + 1, new Dictionary<Int32, TeamspeakChannel>());
                             consoleWrite("[Connection] ^2Found ^bTeam^n Channel: {0} ({1}).", tsChannel.tsName, tsChannel.tsId);
@@ -2248,8 +2128,7 @@ namespace PRoConEvents
                 foreach (Int32 teamId in mTeamChannels.Keys)
                     if (tsChannel.medPId == mTeamChannels[teamId].tsId)
                         for (int i = 0; i < chnSquadNames.Length; i++)
-                            if (!mSquadChannels[teamId].ContainsKey(i + 1) && tsChannel.tsName == chnSquadNames[i])
-                            {
+                            if (!mSquadChannels[teamId].ContainsKey(i + 1) && tsChannel.tsName == chnSquadNames[i]) {
                                 mSquadChannels[teamId].Add(i + 1, tsChannel);
                                 consoleWrite("[Connection] ^2Found ^bSquad^n Channel: {0} ({1}).", tsChannel.tsName, tsChannel.tsId);
                                 break;
@@ -2273,8 +2152,8 @@ namespace PRoConEvents
             mTeamChannels.Clear();
             mSquadChannels.Clear();
             mPickupChannels.Clear();
-            mTsResponse = new TeamspeakResponse("error id=0 msg=ok");
-            mCurrentAction = null;
+            mTsResponse     = new TeamspeakResponse("error id=0 msg=ok");
+            mCurrentAction  = null;
             mPreviousAction = null;
 
             consoleWrite("[Closing] Teamspeak 3 Sync stopped.");
@@ -2296,7 +2175,7 @@ namespace PRoConEvents
                     consoleWrite("[Error] ^3Minor Error:");
                     consoleWrite("[Error] ^3{0}: {1}", mTsResponse.Id, mTsResponse.Message);
                     return true;
-
+                    
                 case "-2": // Invalid IP Address.
                 case "-3": // Invalid Port.
                 case "-4": // Error occurred when trying to establish a connection.
@@ -2307,7 +2186,7 @@ namespace PRoConEvents
                     if (!mTsReconnecting && errReconnectOnError && performReconnect()) break;
                     setPluginState(false);
                     return false;
-
+                    
                 case "-7": // Error occurred during sending the query.
                 case "-8": // Error occurred during receiving the response.
                     consoleWrite("[Error] ^8Fatal Error:");
@@ -2316,7 +2195,7 @@ namespace PRoConEvents
                     if (!mTsReconnecting && errReconnectOnError && performReconnect()) break;
                     setPluginState(false);
                     return false;
-
+                    
                 case "3329": // You are temp banned from the server for flooding.
                 case "3331": // You are temp banned from the server for 'x' seconds.
                     consoleWrite("[Error] ^8Fatal Error:");
@@ -2464,7 +2343,7 @@ namespace PRoConEvents
         {
             consoleWrite("[Reconnect] Attempting to establish a new connection to the Teamspeak 3 Server.");
             mTsReconnecting = true;
-            for (int attempt = 1; attempt <= errReconnectOnErrorAttempts; attempt++)
+            for (int attempt = 1 ; attempt <= errReconnectOnErrorAttempts; attempt++)
             {
                 // -- Sleep if this isn't our first attempt.
                 if (attempt != 1)
@@ -2481,12 +2360,11 @@ namespace PRoConEvents
                     performOpenConnection();
                     if (mTsResponse.Id == "0") { mTsReconnecting = false; return true; }
                     // -- Notify we've failed.
-                    consoleWrite("[Reconnect] Failed {0}.",
-                        (attempt < errReconnectOnErrorAttempts) ?
-                            ("attempt " + attempt + " out of " + errReconnectOnErrorAttempts) :
+                    consoleWrite("[Reconnect] Failed {0}.", 
+                        (attempt < errReconnectOnErrorAttempts) ? 
+                            ("attempt "+attempt+" out of "+errReconnectOnErrorAttempts) : 
                             ("the last attempt."));
-                }
-                else attempt = errReconnectOnErrorAttempts + 1;
+                } else attempt = errReconnectOnErrorAttempts + 1;
             }
             mTsReconnecting = false;
             return false;
@@ -2519,6 +2397,7 @@ namespace PRoConEvents
             foreach (TeamspeakResponseSection sec in mTsResponse.Sections)
                 foreach (TeamspeakResponseGroup grp in sec.Groups)
                     channelInfo.Add(new TeamspeakChannel(grp));
+
 
             // Clean list of users who aren't in a known channel
             for (int i = 0; i < clientInfo.Count; i++)
@@ -2626,8 +2505,7 @@ namespace PRoConEvents
                 punkInfo.PlayerCountry, punkInfo.PlayerCountryCode);
 
             // If it's in the list already and it has ip information, just replace it.  Otherwise, add it to the list.
-            if (mClientPbInfo.ContainsKey(punkInfo.SoldierName))
-            {
+            if (mClientPbInfo.ContainsKey(punkInfo.SoldierName)) {
                 if (punkInfo.Ip != "")
                     mClientPbInfo[punkInfo.SoldierName] = punkInfo;
             }
@@ -2644,9 +2522,8 @@ namespace PRoConEvents
             // [0] Used to hold the current client info.
             // [1] Used to hold the Game Client Master Clients who could not be matched.
             // [2] Used to hold the clients whose IP matched the Game Client's IP
-            List<MasterClient> clientInfo = new List<MasterClient>();
+            List<MasterClient> clientInfo    = new List<MasterClient>();
             List<MasterClient> newClientInfo = new List<MasterClient>();
-            List<MasterClient> matchOnIp = new List<MasterClient>();
 
 
             // Create Master Clients out of teamspeak clients.
@@ -2655,42 +2532,32 @@ namespace PRoConEvents
 
 
             // First, determine if the game client has an IP.
-            foreach (GameClient gmClient in mClientGmInfo)
+            foreach (GameClient gmClient in mClientGmInfo) {
                 #region Match Game Clients (with IPs) to Master Clients
 
-                if (gmClient.HasPbInfo)
-                {
+                if (gmClient.HasPbInfo) {
                     // Second, build a list of clients from the master list whom IP matches this gm client.
-                    matchOnIp.Clear();
+                    List<MasterClient> matchOnIp = new List<MasterClient>();
                     foreach (MasterClient mstClient in clientInfo)
                         if (gmClient.IP == mstClient.TsClient.advIpAddress)
                             matchOnIp.Add(mstClient);
 
-                    // Multiple matches require sorting.
-                    if (matchOnIp.Count > 1)
-                    {
-                        Int32 matchIndex = 0;
-                        Double biggestPercent = 0;
-                        Double currentPercent = 0;
-                        for (int i = 0; i < matchOnIp.Count; i++)
-                        {
-                            currentPercent = MasterClient.calcPercentMatch(gmClient.Name.ToLower(), matchOnIp[i].TsClient.tsName.ToLower());
-                            if (currentPercent > biggestPercent)
-                            {
-                                matchIndex = i;
-                                biggestPercent = currentPercent;
+                    // Multiple matches require fallback on name.
+                    if (matchOnIp.Count > 1) {
+                        for (int i = 0; i < matchOnIp.Count; i++) {
+                            if (matchOnIp[i].HasGmClient || gmClient.Name.ToLower() != matchOnIp[i].TsClient.tsName.ToLower()) {
+
+                                matchOnIp.RemoveAt(i--);
                             }
                         }
-                        matchOnIp[matchIndex].GmClient = gmClient;
                     }
+                    
                     // Single matches are simply one-to-one.
-                    else if (matchOnIp.Count == 1)
-                    {
+                    if (matchOnIp.Count == 1) {
                         matchOnIp[0].GmClient = gmClient;
                     }
                     // No matches are players not in teamspeak.
-                    else
-                    {
+                    else {
                         newClientInfo.Add(new MasterClient(gmClient));
                     }
                 }
@@ -2698,33 +2565,25 @@ namespace PRoConEvents
                 #endregion
                 #region Match Game Clients (without IPs) to Master Clients
 
-                else
-                {
+                else {
                     // Second, because the game client does not have an IP, try to match the name.
-                    Int32 matchIndex = 0;
-                    Double biggestPercent = 0;
-                    Double currentPercent = 0;
-                    for (int i = 0; i < clientInfo.Count; i++)
-                        if (!clientInfo[i].HasGmClient)
-                        {
-                            currentPercent = MasterClient.calcPercentMatch(gmClient.Name.ToLower(), clientInfo[i].TsClient.tsName.ToLower());
-                            if (currentPercent > biggestPercent)
-                            {
-                                matchIndex = i;
-                                biggestPercent = currentPercent;
-                            }
-                        }
-
-                    // Matches above the threshold are put together.
-                    if (biggestPercent >= synMatchingThreshold)
-                        clientInfo[matchIndex].GmClient = gmClient;
-                    // Matches below the threshold are not in teamspeak.
-                    else
+                    List<MasterClient> matchOnName = new List<MasterClient>();
+                    foreach (MasterClient mstClient in clientInfo)
+                        if (!mstClient.HasGmClient && gmClient.Name.ToLower() == mstClient.TsClient.tsName.ToLower())
+                            matchOnName.Add(mstClient);
+                    
+                    // Single matches are simply one-to-one.
+                    if (matchOnName.Count == 1) {
+                        matchOnName[0].GmClient = gmClient;
+                    }
+                    // Treat multiple matches as no matches.  No matches are players not in teamspeak.
+                    else {
                         newClientInfo.Add(new MasterClient(gmClient));
+                    }
                 }
 
                 #endregion
-
+            }
 
             // Consolidate master client lists and update global list.
             clientInfo.AddRange(newClientInfo);
@@ -2787,10 +2646,9 @@ namespace PRoConEvents
             {
                 // Don't move players from pickup channels to the staging channel.
                 foreach (TeamspeakChannel tsChannel in mPickupChannels)
-                    if (tsChannel.tsId == client.TsClient.medChannelId)
-                    {
-                        consoleWrite("[Swapping] - Staging Mode - Skipping Client ({0}) because he/she is in Ch.{1}.", client.TsClient.tsName, client.TsClient.medChannelId);
-                        break;
+                    if (tsChannel.tsId == client.TsClient.medChannelId) {
+                        debugWrite(dbgSwapping, "[Swapping] - Staging Mode - Skipping Client ({0}) because he/she is in Ch.{1}.", client.TsClient.tsName, client.TsClient.medChannelId);
+                        return;
                     }
 
                 // Move the client to the staging channel.
@@ -2815,8 +2673,7 @@ namespace PRoConEvents
             else if (!synSquadBasedSwapping || getPlayersOnBothServersOnTeam(client.GmClient.TeamId).Count < synSquadBasedThreshold || client.GmClient.SquadId == 0 || getPlayersOnBothServersOnSquad(client.GmClient.TeamId, client.GmClient.SquadId).Count < synSquadSizeMinimum || client.IsSyncToTeam)
             {
                 // Locate / Create the team channel.
-                if (!mTeamChannels.ContainsKey(client.GmClient.TeamId))
-                {
+                if (!mTeamChannels.ContainsKey(client.GmClient.TeamId)) {
                     findOrCreateTeamChannel(client.GmClient.TeamId);
                     if (!mTeamChannels.ContainsKey(client.GmClient.TeamId)) return;
                 }
@@ -2825,8 +2682,7 @@ namespace PRoConEvents
                 if (client.TsClient.medChannelId != mTeamChannels[client.GmClient.TeamId].tsId)
                 {
                     sendTeamspeakQuery(TeamspeakQuery.buildClientMoveQuery(client.TsClient.tsId.Value, mTeamChannels[client.GmClient.TeamId].tsId.Value));
-                    if (mTsResponse.Id == "768")
-                    {
+                    if (mTsResponse.Id == "768") {
                         mTeamChannels.Remove(client.GmClient.TeamId);
                         mSquadChannels.Remove(client.GmClient.TeamId);
                     }
@@ -2844,15 +2700,13 @@ namespace PRoConEvents
             else
             {
                 // Locate / Create the team channel.
-                if (!mTeamChannels.ContainsKey(client.GmClient.TeamId))
-                {
+                if (!mTeamChannels.ContainsKey(client.GmClient.TeamId)) {
                     findOrCreateTeamChannel(client.GmClient.TeamId);
                     if (!mTeamChannels.ContainsKey(client.GmClient.TeamId)) return;
                 }
 
                 // Locate / Create the squad channel.
-                if (!mSquadChannels[client.GmClient.TeamId].ContainsKey(client.GmClient.SquadId))
-                {
+                if (!mSquadChannels[client.GmClient.TeamId].ContainsKey(client.GmClient.SquadId)) {
                     findOrCreateSquadChannel(client.GmClient.TeamId, client.GmClient.SquadId);
                     if (!mSquadChannels[client.GmClient.TeamId].ContainsKey(client.GmClient.SquadId)) return;
                 }
@@ -2861,8 +2715,7 @@ namespace PRoConEvents
                 if (client.TsClient.medChannelId != mSquadChannels[client.GmClient.TeamId][client.GmClient.SquadId].tsId)
                 {
                     sendTeamspeakQuery(TeamspeakQuery.buildClientMoveQuery(client.TsClient.tsId.Value, mSquadChannels[client.GmClient.TeamId][client.GmClient.SquadId].tsId.Value));
-                    if (mTsResponse.Id == "768")
-                    {
+                    if (mTsResponse.Id == "768") {
                         mSquadChannels[client.GmClient.TeamId].Remove(client.GmClient.SquadId);
                     }
                     if (!performResponseHandling(Queries.CheckSwapSquad)) return;
@@ -2889,32 +2742,34 @@ namespace PRoConEvents
             // Only attempt to remove the client if they are not in the whitelist.
             if (!mClientWhitelist.Contains(client.TsClient.medDatabaseId.Value))
             {
-                //Do not remove a client if they are in a pickup channel
-                foreach (TeamspeakChannel teamspeakChannel in mPickupChannels)
-                {
-                    if (client.TsClient.medChannelId == teamspeakChannel.tsId)
+                // I don't know if this can ever happen, but might as well be safe.
+                // Don't move players from pickup channels to the staging channel.
+                foreach (TeamspeakChannel tsChannel in mPickupChannels)
+                    if (tsChannel.tsId == client.TsClient.medChannelId)
                     {
+                        debugWrite(dbgSwapping, "[Swapping] - Remove Client - Skipping Client ({0}) because he/she is in Ch.{1}.", client.TsClient.tsName, client.TsClient.medChannelId);
                         return;
                     }
-                }
 
-                // Determine the channel that we need to move to.  
-                int? swapChannelId = ts3EnableDropoff ? mDropoffChannel.tsId : mStagingChannel.tsId;
-                
-                // Move the client to the appropriate channel (Dropoff or staging)
-                if (client.TsClient.medChannelId != swapChannelId)
-                {
-                    sendTeamspeakQuery(TeamspeakQuery.buildClientMoveQuery(client.TsClient.tsId.Value, swapChannelId.Value));
-                    if (!performResponseHandling(Queries.CheckRemove)) return;
-                    client.TsClient.medChannelId = swapChannelId;
-                    debugWrite(dbgSwapping, "[Swapping] - Remove Client - Client ({0}) from Ch.{1} to Ch.{2}.", client.TsClient.tsName, channelId, client.TsClient.medChannelId);
+            }
 
-                    // Delete the channel if the remove option is enabled.
-                    if (chnRemoveOnEmpty)
-                        removeChannels();
-                }
+            // Determine the channel that we need to move to.  
+            int? swapChannelId = ts3EnableDropoff ? mDropoffChannel.tsId : mStagingChannel.tsId;
+
+            // Move the client to the appropriate channel (Dropoff or staging)
+            if (client.TsClient.medChannelId != swapChannelId)
+            {
+                sendTeamspeakQuery(TeamspeakQuery.buildClientMoveQuery(client.TsClient.tsId.Value, swapChannelId.Value));
+                if (!performResponseHandling(Queries.CheckRemove)) return;
+                client.TsClient.medChannelId = swapChannelId;
+                debugWrite(dbgSwapping, "[Swapping] - Remove Client - Client ({0}) from Ch.{1} to Ch.{2}.", client.TsClient.tsName, channelId, client.TsClient.medChannelId);
+
+                // Delete the channel if the remove option is enabled.
+                if (chnRemoveOnEmpty)
+                    removeChannels();
             }
         }
+        
         /// <summary>Messages a client if they aren't in teamspeak.</summary>
         /// <param name="client">The client to check.</param>
         public void checkClientForMessage(MasterClient client)
@@ -3099,29 +2954,20 @@ namespace PRoConEvents
                 mClientGmInfo.Add(gmClient);
 
                 // Attempt to match the game client based on their name to a teamspeak client.
-                MasterClient matchClient = null;
-                Double biggestPercent = 0;
-                Double currentPercent = 0;
+                List<MasterClient> matchOnName = new List<MasterClient>();
                 foreach (MasterClient mstClient in getPlayersOnTsOnly())
-                {
-                    currentPercent = MasterClient.calcPercentMatch(gmClient.Name, mstClient.TsClient.tsName);
-                    if (currentPercent > biggestPercent)
-                    {
-                        matchClient = mstClient;
-                        biggestPercent = currentPercent;
-                    }
-                }
+                    if (gmClient.Name.ToLower() == mstClient.TsClient.tsName.ToLower())
+                        matchOnName.Add(mstClient);
 
-                // If our match is above the threshold, the clients match.
-                // Update the Master client list then check the player for a swap.
-                if (biggestPercent >= synMatchingThreshold && matchClient != null)
-                {
-                    matchClient.GmClient = gmClient;
-                    addToActionQueue(Commands.CheckClientForSwapping, matchClient);
+                // Single matches are simply one-to-one.
+                if (matchOnName.Count == 1) {
+                    matchOnName[0].GmClient = gmClient;
+                    addToActionQueue(Commands.CheckClientForSwapping, matchOnName[0]);
                 }
-                // Otherwise, consider the client not in teamspeak, and add them as BC2 only.
-                else
+                // Treat multiple matches as no matches.  No matches are players not in teamspeak.
+                else {
                     mClientAllInfo.Add(new MasterClient(gmClient));
+                }
             }
         }
 
@@ -3186,8 +3032,7 @@ namespace PRoConEvents
                     teamChannel = tsChannels[i];
 
             // Add the channel to global channels list if we found one.
-            if (teamChannel != null)
-            {
+            if (teamChannel != null) {
                 mTeamChannels.Remove(TeamId);
                 mSquadChannels.Remove(TeamId);
                 mTeamChannels.Add(TeamId, teamChannel);
@@ -3229,8 +3074,7 @@ namespace PRoConEvents
                     squadChannel = tsChannels[i];
 
             // Add the channel to the global channels list if we found one.
-            if (squadChannel != null)
-            {
+            if (squadChannel != null) {
                 mSquadChannels[TeamId].Remove(SquadId);
                 mSquadChannels[TeamId].Add(SquadId, squadChannel);
                 debugWrite(dbgChannels, "[Channels] Found ^bSquad^n Channel: {0} ({1}).", squadChannel.tsName, squadChannel.tsId);
@@ -3248,22 +3092,19 @@ namespace PRoConEvents
             debugWrite(dbgChannels, "[Channels] Attempting to create ^bTeam^n Channel: {0}.", Name);
 
             // Determine if we should set a password.
-            if (chnPassword != String.Empty)
-            {
+            if (chnPassword != String.Empty) {
                 channelCreateQuery.addParameter("channel_password", chnPassword);
                 debugWrite(dbgChannels, "[Channels] Using Password ({0}).", chnPassword);
             }
 
             // Determine where the channel should be sorted.
             for (int i = TeamId - 1; i >= 0; i--)
-                if (mTeamChannels.ContainsKey(i) && mTeamChannels[i].medPId == mStagingChannel.tsId)
-                {
+                if (mTeamChannels.ContainsKey(i) && mTeamChannels[i].medPId == mStagingChannel.tsId) {
                     channelCreateQuery.addParameter("channel_order", mTeamChannels[i].tsId.ToString());
                     debugWrite(dbgChannels, "[Channels] Order After {0}.", mTeamChannels[i].tsName);
                     break;
                 }
-                else if (i == 0)
-                {
+                else if (i == 0) {
                     channelCreateQuery.addParameter("channel_order", "0");
                     debugWrite(dbgChannels, "[Channels] Order After Top.");
                     break;
@@ -3306,22 +3147,19 @@ namespace PRoConEvents
             debugWrite(dbgChannels, "[Channels] Attempting to create ^bSquad^n Channel: {0}.", Name);
 
             // Determine if we should set a password.
-            if (chnPassword != String.Empty)
-            {
+            if (chnPassword != String.Empty) {
                 channelCreateQuery.addParameter("channel_password", chnPassword);
                 debugWrite(dbgChannels, "[Channels] Using Password ({0}).", chnPassword);
             }
 
             // Determine where the channel should be sorted.
             for (int i = SquadId - 1; i >= 0; i--)
-                if (mSquadChannels[TeamId].ContainsKey(i) && mSquadChannels[TeamId][i].medPId == mTeamChannels[TeamId].tsId)
-                {
+                if (mSquadChannels[TeamId].ContainsKey(i) && mSquadChannels[TeamId][i].medPId == mTeamChannels[TeamId].tsId) {
                     channelCreateQuery.addParameter("channel_order", mSquadChannels[TeamId][i].tsId.ToString());
                     debugWrite(dbgChannels, "[Channels] Order After {0}.", mSquadChannels[TeamId][i].tsName);
                     break;
                 }
-                else if (i == 0)
-                {
+                else if (i == 0) {
                     channelCreateQuery.addParameter("channel_order", "0");
                     debugWrite(dbgChannels, "[Channels] Order After Top.");
                     break;
@@ -3351,7 +3189,7 @@ namespace PRoConEvents
         public void removeChannels()
         {
             // Dictionaries of channels to remove.
-            Dictionary<Int32, TeamspeakChannel> teamChannels = new Dictionary<Int32, TeamspeakChannel>();
+            Dictionary<Int32, TeamspeakChannel>                    teamChannels  = new Dictionary<Int32, TeamspeakChannel>();
             Dictionary<Int32, Dictionary<Int32, TeamspeakChannel>> squadChannels = new Dictionary<Int32, Dictionary<Int32, TeamspeakChannel>>();
             debugWrite(dbgChannels, "[Channels] Attempting to remove empty channels.");
 
@@ -3376,8 +3214,7 @@ namespace PRoConEvents
                         if (inChannel = mSquadChannels[teamId][squadId].tsId == tsClient.medChannelId)
                             break;
                     // Add the channel to the list of channels to remove.
-                    if (!inChannel)
-                    {
+                    if (!inChannel) {
                         if (!squadChannels.ContainsKey(teamId))
                             squadChannels.Add(teamId, new Dictionary<Int32, TeamspeakChannel>());
                         squadChannels[teamId].Add(squadId, mSquadChannels[teamId][squadId]);
@@ -3434,7 +3271,7 @@ namespace PRoConEvents
         }
 
 
-
+        
         /// <summary>Retrieves a list of players that are on both the teamspeak 3 and game server for a specific team.</summary>
         /// <returns>A list of players on both servers for the specified team.</returns>
         public List<MasterClient> getPlayersOnBothServersOnSquad(Int32 teamId, Int32 squadId)
@@ -3545,8 +3382,7 @@ namespace PRoConEvents
         /// <summary>Sends a query to the teamspeak server (delayed if necessary) and sets the response.</summary>
         public void sendTeamspeakQuery(TeamspeakQuery query)
         {
-            if (synDelayQueries)
-            {
+            if (synDelayQueries) {
                 TimeSpan delay = TimeSpan.FromMilliseconds(synDelayQueriesAmount);
                 TimeSpan delta = DateTime.Now - mTsPrevSendTime;
                 if (delta <= delay) Thread.Sleep(delay - delta);
